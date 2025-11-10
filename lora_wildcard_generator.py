@@ -113,18 +113,23 @@ class LoraWildcardGenerator:
 
         return lora_syntax
 
-    def create_yaml_content(self, entries):
+    def create_yaml_content(self, entries, wildcard_name):
         """
         Create YAML content from entries
 
         Args:
             entries: List of dictionaries with lora_name and trained_words
+            wildcard_name: Name for the wildcard (used as top-level key)
 
         Returns:
             YAML formatted string
         """
-        # Create dictionary for YAML
-        yaml_dict = {}
+        # Create nested dictionary for YAML
+        # Structure: wildcard_name -> all-<wildcard_name> and individual entries
+        nested_dict = {}
+
+        # Collect all lora names for the 'all' entry
+        all_lora_refs = []
 
         for entry in entries:
             lora_name = entry['lora_name']
@@ -133,14 +138,30 @@ class LoraWildcardGenerator:
             # Generate LoRA entry
             lora_entry = self.generate_lora_entry(lora_name, trained_words)
 
-            # Add to dictionary
+            # Add to nested dictionary
             # Format: filename: [<lora:...>triggers]
-            yaml_dict[lora_name] = [lora_entry]
+            nested_dict[lora_name] = [lora_entry]
+
+            # Add reference for 'all' entry
+            all_lora_refs.append(f"__{lora_name}__")
+
+        # Create 'all' entry that randomly selects one LoRA
+        all_key = f"all-{wildcard_name}"
+        all_entry = "{" + "|".join(all_lora_refs) + "}"
+
+        # Create final dictionary with wildcard_name as top-level key
+        # Order: wildcard_name -> all-<wildcard_name> first, then individual entries
+        final_dict = {
+            wildcard_name: {
+                all_key: [all_entry],
+                **nested_dict
+            }
+        }
 
         # Convert to YAML
         # Use large width to prevent line wrapping
         yaml_content = yaml.dump(
-            yaml_dict,
+            final_dict,
             default_flow_style=False,
             allow_unicode=True,
             sort_keys=False,
@@ -203,7 +224,7 @@ class LoraWildcardGenerator:
 
             # Create YAML content
             print(f"\nGenerating YAML wildcard file...")
-            yaml_content = self.create_yaml_content(entries)
+            yaml_content = self.create_yaml_content(entries, wildcard_name)
 
             # Create output folder if it doesn't exist
             output_path = Path(output_folder)
