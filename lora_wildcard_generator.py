@@ -9,20 +9,6 @@ import yaml
 from pathlib import Path
 
 
-class FoldedString(str):
-    """Custom string class for YAML folded scalar output (>-)"""
-    pass
-
-
-def folded_string_representer(dumper, data):
-    """Representer for folded scalar style in YAML"""
-    return dumper.represent_scalar('tag:yaml.org,2002:str', data, style='>')
-
-
-# Register the custom representer
-yaml.add_representer(FoldedString, folded_string_representer)
-
-
 class LoraWildcardGenerator:
     """
     A node that generates YAML wildcard files from Civitai JSON metadata.
@@ -163,14 +149,11 @@ class LoraWildcardGenerator:
         all_key = f"all-{wildcard_name}"
         all_entry = "{" + "|".join(all_lora_refs) + "}"
 
-        # Wrap all_entry in FoldedString for >- YAML format
-        all_entry_folded = FoldedString(all_entry)
-
         # Create final dictionary with wildcard_name as top-level key
         # Order: wildcard_name -> all-<wildcard_name> first, then individual entries
         final_dict = {
             wildcard_name: {
-                all_key: [all_entry_folded],
+                all_key: [all_entry],
                 **nested_dict
             }
         }
