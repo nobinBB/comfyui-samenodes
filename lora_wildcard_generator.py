@@ -41,6 +41,7 @@ class LoraWildcardGenerator:
     RETURN_NAMES = ("status", "entry_count")
     FUNCTION = "generate_wildcard"
     CATEGORY = "utils/lora"
+    OUTPUT_NODE = True
 
     def parse_json_file(self, json_path):
         """
