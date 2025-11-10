@@ -87,12 +87,18 @@ class LoraWildcardGenerator:
             String with LoRA syntax
         """
         # Join trained words with comma and space
-        # Remove trailing commas if present
-        words = ', '.join(trained_words).rstrip(', ')
+        words = ', '.join(trained_words)
 
-        # Generate LoRA syntax with variable strength
-        # Format: <lora:name:{0.4|0.5|0.6|0.7|0.8}>trigger words
-        lora_syntax = f"<lora:{lora_name}:{{0.4|0.5|0.6|0.7|0.8}}>{words}"
+        # Replace newlines with | to handle multi-line trigger words
+        words = words.replace('\n', '|').replace('\r', '')
+
+        # Clean up extra spaces and commas
+        words = ' '.join(words.split())  # Normalize whitespace
+        words = words.rstrip(', ')
+
+        # Wrap trigger words in braces and generate LoRA syntax
+        # Format: <lora:name:{0.4|0.5|0.6|0.7|0.8}>{trigger words}
+        lora_syntax = f"<lora:{lora_name}:{{0.4|0.5|0.6|0.7|0.8}}>{{{words}}}"
 
         return lora_syntax
 
@@ -121,11 +127,13 @@ class LoraWildcardGenerator:
             yaml_dict[lora_name] = [lora_entry]
 
         # Convert to YAML
+        # Use large width to prevent line wrapping
         yaml_content = yaml.dump(
             yaml_dict,
             default_flow_style=False,
             allow_unicode=True,
-            sort_keys=False
+            sort_keys=False,
+            width=float('inf')  # Prevent automatic line wrapping
         )
 
         return yaml_content
