@@ -92,9 +92,20 @@ class LoraWildcardGenerator:
         # Replace newlines with | to handle multi-line trigger words
         words = words.replace('\n', '|').replace('\r', '')
 
-        # Clean up extra spaces and commas
-        words = ' '.join(words.split())  # Normalize whitespace
-        words = words.rstrip(', ')
+        # Clean up comma before pipe (e.g., ", |" or ",|" becomes "|")
+        words = words.replace(', |', '|').replace(',|', '|')
+
+        # Clean up space after pipe (e.g., "| " becomes "|")
+        words = words.replace('| ', '|')
+
+        # Normalize whitespace for each part separated by pipe
+        # Split by pipe, trim and normalize each part, then rejoin
+        parts = words.split('|')
+        parts = [' '.join(part.strip().split()) for part in parts]
+        words = '|'.join(parts)
+
+        # Remove trailing commas, pipes, and spaces
+        words = words.rstrip(',| ')
 
         # Wrap trigger words in braces and generate LoRA syntax
         # Format: <lora:name:{0.4|0.5|0.6|0.7|0.8}>{trigger words}
