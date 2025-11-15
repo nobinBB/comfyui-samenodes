@@ -67,6 +67,10 @@ class LoraWildcardGenerator:
             # Get filename without extension for LoRA name
             lora_name = json_path.stem
 
+            # Remove .metadata suffix if present
+            if lora_name.endswith('.metadata'):
+                lora_name = lora_name[:-9]  # Remove '.metadata' (9 characters)
+
             return {
                 'lora_name': lora_name,
                 'trained_words': trained_words
