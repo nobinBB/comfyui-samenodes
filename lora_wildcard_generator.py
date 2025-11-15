@@ -9,6 +9,23 @@ import yaml
 from pathlib import Path
 
 
+def str_representer(dumper, data):
+    """
+    Custom string representer for YAML to use plain style (no quotes)
+    for strings containing wildcard patterns {A|B} or __wildcard__.
+    This ensures wildcards are properly expanded by ComfyUI wildcard systems.
+    """
+    # Use plain style (no quotes) for strings with wildcard syntax
+    if '{' in data or '__' in data:
+        return dumper.represent_scalar('tag:yaml.org,2002:str', data, style='')
+    # Default representation for other strings
+    return dumper.represent_scalar('tag:yaml.org,2002:str', data)
+
+
+# Register custom string representer
+yaml.add_representer(str, str_representer)
+
+
 class LoraWildcardGenerator:
     """
     A node that generates YAML wildcard files from Civitai JSON metadata.
