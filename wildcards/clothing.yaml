@@ -1,6 +1,7 @@
 clothing:
   all-clothing:
-  - {__shirt__}
+  - >-
+    {__shirt__}
   shirt:
   - shirt, collared shirt
   - white shirt

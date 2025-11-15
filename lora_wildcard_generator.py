@@ -9,6 +9,16 @@ import yaml
 from pathlib import Path
 
 
+class FoldedString(str):
+    """Custom string class for YAML folded scalar output (>-)"""
+    pass
+
+
+def folded_string_representer(dumper, data):
+    """Representer for folded scalar style in YAML"""
+    return dumper.represent_scalar('tag:yaml.org,2002:str', data, style='>')
+
+
 def str_representer(dumper, data):
     """
     Custom string representer for YAML to use plain style (no quotes)
@@ -22,7 +32,8 @@ def str_representer(dumper, data):
     return dumper.represent_scalar('tag:yaml.org,2002:str', data)
 
 
-# Register custom string representer
+# Register custom representers
+yaml.add_representer(FoldedString, folded_string_representer)
 yaml.add_representer(str, str_representer)
 
 
@@ -171,11 +182,14 @@ class LoraWildcardGenerator:
         all_key = f"all-{wildcard_name}"
         all_entry = "{" + "|".join(all_lora_refs) + "}"
 
+        # Wrap in FoldedString for >- YAML format (newline-based)
+        all_entry_folded = FoldedString(all_entry)
+
         # Create final dictionary with wildcard_name as top-level key
         # Order: wildcard_name -> all-<wildcard_name> first, then individual entries
         final_dict = {
             wildcard_name: {
-                all_key: [all_entry],
+                all_key: [all_entry_folded],
                 **nested_dict
             }
         }
