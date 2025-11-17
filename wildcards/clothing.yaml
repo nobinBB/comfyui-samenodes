@@ -1,0 +1,108 @@
+clothing:
+  all-clothing:
+  - >-
+    {__shirt__}
+  shirt:
+  - shirt, collared shirt
+  - white shirt
+  - black shirt
+  - blue shirt
+  - red shirt
+  - pink shirt
+  - green shirt
+  - gray shirt
+  - yellow shirt
+  - purple shirt
+  - dress shirt
+  - t-shirt
+  - polo shirt
+  - button-up shirt
+  - button shirt, buttons
+  - long sleeves, dress shirt
+  - short sleeves, t-shirt
+  - sleeveless shirt
+  - crop top, midriff
+  - off-shoulder shirt
+  - see-through shirt, sheer
+  - striped shirt, vertical stripes
+  - striped shirt, horizontal stripes
+  - plaid shirt, checkered
+  - polka dot shirt
+  - floral print shirt
+  - graphic tee, print shirt
+  - anime shirt, graphic tee
+  - band tee, graphic shirt
+  - oversized shirt
+  - tight shirt, fitted
+  - loose shirt
+  - cropped shirt, midriff
+  - tucked in, shirt tucked in
+  - untucked shirt
+  - partially unbuttoned, cleavage
+  - unbuttoned shirt, open shirt
+  - tied shirt, shirt tied at waist
+  - sleeves rolled up
+  - sleeves pushed up
+  - torn shirt, ripped
+  - wet shirt, wet clothes
+  - shirt lift, lifted by self
+  - collared shirt, necktie
+  - collared shirt, bowtie
+  - dress shirt, vest
+  - shirt, suspenders
+  - frilled shirt, frills
+  - lace shirt, lace trim
+  - sailor collar, sailor shirt
+  - turtleneck shirt
+  - v-neck shirt
+  - crew neck, basic tee
+  - henley shirt, buttoned collar
+  - tank top, sleeveless
+  - halter top, halterneck
+  - tube top, strapless
+  - camisole, spaghetti strap
+  - sports bra, athletic top
+  - compression shirt, sports
+  - raglan sleeves, baseball tee
+  - puff sleeves, puffy short sleeves
+  - bishop sleeves, long puffy sleeves
+  - bell sleeves, flared
+  - ruffled sleeves, frilly
+  - cold shoulder, shoulder cutout
+  - one shoulder, asymmetrical
+  - backless shirt, bare back
+  - midriff peek, stomach cutout
+  - side slit, side cutout
+  - sheer shirt, see-through
+  - mesh shirt, fishnet
+  - lace-up shirt, corset front
+  - zipper, zip-up shirt
+  - hoodie, hood
+  - cropped hoodie, midriff
+  - sweatshirt, casual
+  - sweater, knit
+  - cardigan, open front
+  - denim shirt, jean shirt
+  - flannel shirt, plaid
+  - chambray shirt, light blue
+  - oxford shirt, button-down
+  - blouse, feminine
+  - peasant blouse, off-shoulder
+  - peplum top, flared hem
+  - wrap top, tied front
+  - asymmetric shirt, uneven hem
+  - high-low shirt, dipped hem
+  - longline shirt, extended length
+  - shirt dress style, oversized
+  - boyfriend shirt, oversized
+  - sports jersey, athletic
+  - baseball jersey, raglan
+  - basketball jersey, sleeveless
+  - football jersey, padded shoulders
+  - racing shirt, checkered flag
+  - aloha shirt, hawaiian
+  - camp collar shirt, cuban
+  - mandarin collar, chinese collar
+  - band collar, collarless
+  - cowl neck, draped
+  - mock neck, high collar
