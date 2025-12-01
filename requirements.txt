@@ -1,0 +1,8 @@
+# ComfyUI Same Nodes - Python Dependencies
+
+# For Civitai Bulk Downloader
+requests>=2.31.0
+python-dotenv>=1.0.0
+
+# For YAML processing (LoRA Wildcard Generator)
+pyyaml>=6.0
