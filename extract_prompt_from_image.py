@@ -5,22 +5,24 @@ Extracts positive and negative prompts from image metadata
 
 import json
 from PIL import Image
-from PIL.PngImagePlugin import PngInfo
-import numpy as np
-import torch
+from pathlib import Path
 
 
 class ExtractPromptFromImage:
     """
     A node that extracts positive and negative prompts from image metadata.
     Supports ComfyUI and Automatic1111 format images.
+    Reads directly from image file to preserve metadata.
     """
 
     @classmethod
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "image": ("IMAGE",),
+                "image_path": ("STRING", {
+                    "default": "",
+                    "multiline": False
+                }),
             },
         }
 
@@ -28,27 +30,6 @@ class ExtractPromptFromImage:
     RETURN_NAMES = ("positive", "negative")
     FUNCTION = "extract_prompt"
     CATEGORY = "image/metadata"
-
-    def tensor_to_pil(self, image_tensor):
-        """
-        Convert ComfyUI image tensor to PIL Image.
-
-        Args:
-            image_tensor: Image tensor [B, H, W, C] or [H, W, C]
-
-        Returns:
-            PIL Image object
-        """
-        # Remove batch dimension if present
-        if len(image_tensor.shape) == 4:
-            image_tensor = image_tensor[0]
-
-        # Convert to numpy and scale to 0-255
-        image_np = image_tensor.cpu().numpy()
-        image_np = (image_np * 255).astype(np.uint8)
-
-        # Convert to PIL
-        return Image.fromarray(image_np)
 
     def extract_comfyui_prompt(self, metadata):
         """
@@ -82,7 +63,7 @@ class ExtractPromptFromImage:
                             # This is a heuristic - may need adjustment
                             node_title = node_data.get('_meta', {}).get('title', '').lower()
 
-                            if 'negative' in node_title:
+                            if 'negative' in node_title or 'neg' in class_type.lower():
                                 negative = text
                             elif not positive:  # First text encode is usually positive
                                 positive = text
@@ -120,21 +101,35 @@ class ExtractPromptFromImage:
 
                 # Extract negative prompt (until the next parameter line)
                 negative_part = parts[1]
-                # Split by newline and get first line
-                negative_lines = negative_part.split('\n')
-                negative = negative_lines[0].strip() if negative_lines else ""
+                # Split by newline and get first line (or until we hit "Steps:" etc)
+                lines = negative_part.split('\n')
+                negative_lines = []
+                for line in lines:
+                    # Stop if we hit generation parameters
+                    if line.startswith('Steps:') or line.startswith('Sampler:') or line.startswith('CFG'):
+                        break
+                    negative_lines.append(line.strip())
+
+                negative = '\n'.join(negative_lines).strip()
             else:
-                # No negative prompt section
-                positive = params.split('\n')[0].strip()
+                # No negative prompt section, extract just positive
+                lines = params.split('\n')
+                # Get all lines until we hit parameters
+                positive_lines = []
+                for line in lines:
+                    if line.startswith('Steps:') or line.startswith('Sampler:') or line.startswith('Negative prompt:'):
+                        break
+                    positive_lines.append(line.strip())
+                positive = '\n'.join(positive_lines).strip()
 
         return positive, negative
 
-    def extract_prompt(self, image):
+    def extract_prompt(self, image_path):
         """
-        Extract positive and negative prompts from image metadata.
+        Extract positive and negative prompts from image file metadata.
 
         Args:
-            image: ComfyUI image tensor
+            image_path: Path to image file
 
         Returns:
             Tuple of (positive_prompt, negative_prompt)
@@ -144,57 +139,72 @@ class ExtractPromptFromImage:
             print(f"Extracting Prompt from Image")
             print(f"{'='*60}\n")
 
-            # Convert tensor to PIL Image
-            pil_image = self.tensor_to_pil(image)
-
-            # Extract PNG metadata
-            metadata = pil_image.info
-
-            if not metadata:
-                print("No metadata found in image")
+            # Validate file path
+            path = Path(image_path)
+            if not path.exists():
+                error_msg = f"Image file not found: {image_path}"
+                print(f"✗ {error_msg}")
                 return ("", "")
 
-            print(f"Found metadata keys: {list(metadata.keys())}")
+            if not path.is_file():
+                error_msg = f"Path is not a file: {image_path}"
+                print(f"✗ {error_msg}")
+                return ("", "")
 
-            positive = ""
-            negative = ""
+            print(f"Reading image: {path.name}")
 
-            # Try ComfyUI format first
-            if 'prompt' in metadata:
-                print("Detected ComfyUI format")
-                positive, negative = self.extract_comfyui_prompt(metadata)
+            # Open image directly from file
+            with Image.open(path) as pil_image:
+                # Extract PNG metadata
+                metadata = pil_image.info
 
-            # Try Automatic1111 format
-            if not positive and 'parameters' in metadata:
-                print("Detected Automatic1111 format")
-                positive, negative = self.extract_automatic1111_prompt(metadata)
+                if not metadata:
+                    print("No metadata found in image")
+                    return ("", "")
 
-            # Fallback: check for direct 'positive' and 'negative' keys
-            if not positive and 'positive' in metadata:
-                positive = metadata['positive']
-            if not negative and 'negative' in metadata:
-                negative = metadata['negative']
+                print(f"Found metadata keys: {list(metadata.keys())}")
 
-            print(f"\n{'='*60}")
-            print(f"Extraction Complete")
-            print(f"{'='*60}")
-            print(f"Positive prompt length: {len(positive)} characters")
-            print(f"Negative prompt length: {len(negative)} characters")
-            print(f"{'='*60}\n")
+                positive = ""
+                negative = ""
 
-            # Preview first 200 characters
-            if positive:
-                preview = positive[:200] + "..." if len(positive) > 200 else positive
-                print(f"Positive preview: {preview}\n")
-            if negative:
-                preview = negative[:200] + "..." if len(negative) > 200 else negative
-                print(f"Negative preview: {preview}\n")
+                # Try ComfyUI format first
+                if 'prompt' in metadata:
+                    print("Detected ComfyUI format")
+                    positive, negative = self.extract_comfyui_prompt(metadata)
 
-            return (positive, negative)
+                # Try Automatic1111 format
+                if not positive and 'parameters' in metadata:
+                    print("Detected Automatic1111 format")
+                    positive, negative = self.extract_automatic1111_prompt(metadata)
+
+                # Fallback: check for direct 'positive' and 'negative' keys
+                if not positive and 'positive' in metadata:
+                    positive = metadata['positive']
+                if not negative and 'negative' in metadata:
+                    negative = metadata['negative']
+
+                print(f"\n{'='*60}")
+                print(f"Extraction Complete")
+                print(f"{'='*60}")
+                print(f"Positive prompt length: {len(positive)} characters")
+                print(f"Negative prompt length: {len(negative)} characters")
+                print(f"{'='*60}\n")
+
+                # Preview first 200 characters
+                if positive:
+                    preview = positive[:200] + "..." if len(positive) > 200 else positive
+                    print(f"Positive preview:\n{preview}\n")
+                if negative:
+                    preview = negative[:200] + "..." if len(negative) > 200 else negative
+                    print(f"Negative preview:\n{preview}\n")
+
+                return (positive, negative)
 
         except Exception as e:
             error_msg = f"Error extracting prompt: {str(e)}"
             print(f"\n✗ {error_msg}\n")
+            import traceback
+            traceback.print_exc()
             return ("", "")
 
 

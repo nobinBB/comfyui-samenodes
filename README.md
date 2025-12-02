@@ -321,7 +321,7 @@ Extracts positive and negative prompts from image metadata (PNG info).
 
 #### Inputs
 
-- **image** (IMAGE): The image containing metadata (ComfyUI image tensor)
+- **image_path** (STRING): Full path to the image file (e.g., `/path/to/image.png`)
 
 #### Outputs
 
@@ -351,16 +351,26 @@ Extracts positive and negative prompts from image metadata (PNG info).
 
 #### Usage Example
 
-1. **Load an image** with Load Image node
-2. **Connect to Extract Prompt from Image** node
+1. **Add Extract Prompt from Image** node to your workflow
+2. **Enter the full path** to your image file in the `image_path` input
+   - Example: `C:/Users/YourName/Pictures/output.png` (Windows)
+   - Example: `/home/user/images/output.png` (Linux/Mac)
 3. **Execute** to extract prompts
 4. **Connect outputs** to Show Text or other nodes to view/use prompts
 
 **Workflow Example:**
 ```
-[Load Image] → [Extract Prompt from Image] → [Show Text (positive)]
-                                          → [Show Text (negative)]
+[Extract Prompt from Image]
+    image_path: "/path/to/your/image.png"
+         ↓ positive
+    [Show Text]
+         ↓ negative
+    [Show Text]
 ```
+
+**Why direct file path?**
+- ComfyUI's Load Image node converts images to tensors, losing metadata
+- Reading directly from file preserves PNG info chunk with prompts
 
 #### Use Cases
 
