@@ -18,7 +18,9 @@ class ExtractPromptFromImage:
     @classmethod
     def INPUT_TYPES(cls):
         return {
-            "required": {
+            "required": {},
+            "optional": {
+                "image": ("IMAGE",),
                 "image_path": ("STRING", {
                     "default": "",
                     "multiline": False
@@ -124,11 +126,12 @@ class ExtractPromptFromImage:
 
         return positive, negative
 
-    def extract_prompt(self, image_path):
+    def extract_prompt(self, image=None, image_path=""):
         """
         Extract positive and negative prompts from image file metadata.
 
         Args:
+            image: Optional IMAGE tensor (not supported - will show warning)
             image_path: Path to image file
 
         Returns:
@@ -139,7 +142,23 @@ class ExtractPromptFromImage:
             print(f"Extracting Prompt from Image")
             print(f"{'='*60}\n")
 
+            # Check if image tensor was provided
+            if image is not None and not image_path:
+                warning_msg = (
+                    "⚠️ WARNING: IMAGE tensor input is not supported.\n"
+                    "   Image tensors in ComfyUI do not contain metadata.\n"
+                    "   Please use 'image_path' input with the file path to the original image.\n"
+                    "   Example: C:\\path\\to\\image.png"
+                )
+                print(warning_msg)
+                return ("", "")
+
             # Validate file path
+            if not image_path:
+                error_msg = "No image_path provided. Please provide a file path to the image."
+                print(f"✗ {error_msg}")
+                return ("", "")
+
             path = Path(image_path)
             if not path.exists():
                 error_msg = f"Image file not found: {image_path}"
