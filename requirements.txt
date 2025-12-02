@@ -6,3 +6,6 @@ python-dotenv>=1.0.0
 
 # For YAML processing (LoRA Wildcard Generator)
 pyyaml>=6.0
+
+# For image metadata extraction (Extract Prompt from Image)
+Pillow>=9.0.0
