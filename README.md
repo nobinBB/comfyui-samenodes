@@ -1,126 +1,126 @@
 # ComfyUI Same Nodes
 
-A collection of custom nodes for ComfyUI that enhance workflow capabilities with utilities for string conversion, batch processing, LoRA management, and automated downloads.
+ComfyUIのワークフローを強化する、文字列変換、バッチ処理、LoRA管理、自動ダウンロードなどのユーティリティを提供するカスタムノード集です。
 
-## Overview
+## 概要
 
-This custom node pack provides essential tools for ComfyUI users:
+このカスタムノードパックは、ComfyUIユーザーに必須のツールを提供します：
 
-- **Float to String**: Precise float-to-string conversion with decimal control
-- **Batch Image Processor**: Efficient batch image operations
-- **LoRA Wildcard Generator**: Automated YAML wildcard generation from Civitai metadata
-- **Civitai Bulk Downloader**: Batch download LoRA models from Civitai with API authentication
-- **Extract Prompt from Image**: Extract positive and negative prompts from image metadata
+- **Float to String**: 小数点以下の桁数を制御できる精密な浮動小数点から文字列への変換
+- **Batch Image Processor**: 効率的なバッチ画像処理
+- **LoRA Wildcard Generator**: Civitaiメタデータから自動的にYAMLワイルドカードを生成
+- **Civitai Bulk Downloader**: CivitaiからLoRAモデルをAPI認証付きでバッチダウンロード
+- **Extract Prompt from Image**: 画像メタデータからポジティブ・ネガティブプロンプトを抽出
 
-These nodes are designed to streamline your ComfyUI workflow, especially when working with LoRA models, wildcards, prompts, and bulk operations.
+これらのノードは、特にLoRAモデル、ワイルドカード、プロンプト、バッチ操作を扱う際に、ComfyUIのワークフローを効率化するよう設計されています。
 
 ---
 
-## Installation
+## インストール
 
-### Step 1: Clone the Repository
+### ステップ1: リポジトリをクローン
 
-Navigate to your ComfyUI's `custom_nodes` folder and clone this repository:
+ComfyUIの `custom_nodes` フォルダに移動して、このリポジトリをクローンします：
 
 ```bash
 cd ComfyUI/custom_nodes
 git clone https://github.com/nobinBB/comfyui-samenodes.git
 ```
 
-### Step 2: Install Dependencies
+### ステップ2: 依存関係をインストール
 
-Install the required Python packages:
+必要なPythonパッケージをインストールします：
 
 ```bash
 cd comfyui-samenodes
 pip install -r requirements.txt
 ```
 
-### Step 3: Configure Environment (For Civitai Bulk Downloader)
+### ステップ3: 環境設定（Civitai Bulk Downloader用）
 
-If you plan to use the Civitai Bulk Downloader node:
+Civitai Bulk Downloaderノードを使用する場合：
 
-1. Copy the environment template:
+1. 環境テンプレートをコピー：
    ```bash
    cp .env.example .env
    ```
 
-2. Edit the `.env` file and add your Civitai API key (see [Civitai Bulk Downloader Setup](#civitai-bulk-downloader-setup) below)
+2. `.env` ファイルを編集してCivitai APIキーを追加（詳細は[Civitai Bulk Downloaderのセットアップ](#civitai-bulk-downloaderのセットアップ)を参照）
 
-### Step 4: Restart ComfyUI
+### ステップ4: ComfyUIを再起動
 
-Restart ComfyUI to load the new nodes.
+ComfyUIを再起動して新しいノードを読み込みます。
 
 ---
 
-## Nodes Documentation
+## ノードのドキュメント
 
 ### 1. Float to String
 
-Converts float values to string format with configurable decimal places.
+浮動小数点値を、小数点以下の桁数を設定可能な文字列形式に変換します。
 
-#### Inputs
+#### 入力
 
-- **value** (FLOAT): The float value to convert
-- **decimal_places** (INT): Number of decimal places to display (0-10)
-- **use_decimal_places** (BOOLEAN): Whether to apply decimal place formatting
+- **value** (FLOAT): 変換する浮動小数点値
+- **decimal_places** (INT): 表示する小数点以下の桁数（0-10）
+- **use_decimal_places** (BOOLEAN): 小数点以下の桁数フォーマットを適用するかどうか
 
-#### Outputs
+#### 出力
 
-- **string** (STRING): The converted string value
+- **string** (STRING): 変換された文字列値
 
-#### Usage Examples
+#### 使用例
 
-| Input Value | Decimal Places | Use Decimal Places | Output |
-|-------------|----------------|-------------------|---------|
+| 入力値 | 小数点以下桁数 | 桁数使用 | 出力 |
+|--------|--------------|---------|------|
 | 3.14159 | 2 | True | "3.14" |
 | 3.14159 | 4 | True | "3.1416" |
 | 3.14159 | - | False | "3.14159" |
 | 42.0 | 0 | True | "42" |
 
-#### Use Cases
+#### ユースケース
 
-- Converting KSampler cfg values to strings for file naming
-- Formatting denoise values for display
-- Creating readable parameter labels in workflows
+- KSamplerのcfg値をファイル名用の文字列に変換
+- denoise値を表示用にフォーマット
+- ワークフロー内で読みやすいパラメータラベルを作成
 
 ---
 
 ### 2. Batch Image Processor
 
-Process multiple images with various batch operations.
+様々なバッチ操作で複数の画像を処理します。
 
-#### Description
+#### 説明
 
-Handles batch image processing tasks efficiently within ComfyUI workflows.
+ComfyUIワークフロー内でバッチ画像処理タスクを効率的に処理します。
 
 ---
 
 ### 3. LoRA Wildcard Generator
 
-Automatically generates YAML wildcard files from Civitai JSON metadata files, creating organized LoRA prompt templates.
+CivitaiのJSONメタデータファイルから自動的にYAMLワイルドカードファイルを生成し、整理されたLoRAプロンプトテンプレートを作成します。
 
-#### Inputs
+#### 入力
 
-- **json_folder** (STRING): Path to folder containing Civitai `.json` metadata files
-- **wildcard_name** (STRING): Name for the wildcard (used as filename and top-level YAML key)
-- **output_folder** (STRING): Path to output folder for generated YAML file
+- **json_folder** (STRING): Civitaiの `.json` メタデータファイルが含まれるフォルダのパス
+- **wildcard_name** (STRING): ワイルドカードの名前（ファイル名およびYAMLのトップレベルキーとして使用）
+- **output_folder** (STRING): 生成されたYAMLファイルの出力フォルダパス
 
-#### Outputs
+#### 出力
 
-- **status** (STRING): Status message with generation details
-- **entry_count** (INT): Number of LoRA entries generated
+- **status** (STRING): 生成の詳細を含むステータスメッセージ
+- **entry_count** (INT): 生成されたLoRAエントリの数
 
-#### Features
+#### 機能
 
-- ✅ Extracts `trainedWords` from Civitai JSON metadata
-- ✅ Generates LoRA syntax with weight variations: `{0.4|0.5|0.6|0.7|0.8}`
-- ✅ Creates `all-<wildcard_name>` entry for random LoRA selection
-- ✅ Automatically removes `.metadata` suffix from filenames
-- ✅ Outputs unquoted YAML for proper wildcard expansion
-- ✅ Compatible with Impact Wildcards and similar extensions
+- ✅ CivitaiのJSONメタデータから `trainedWords` を抽出
+- ✅ ウェイトバリエーション付きのLoRA構文を生成：`{0.4|0.5|0.6|0.7|0.8}`
+- ✅ ランダムLoRA選択用の `all-<wildcard_name>` エントリを作成
+- ✅ ファイル名から `.metadata` サフィックスを自動削除
+- ✅ ワイルドカード展開に適したクォートなしYAMLを出力
+- ✅ Impact Wildcardsなどの拡張機能と互換性あり
 
-#### Generated YAML Format
+#### 生成されるYAMLフォーマット
 
 ```yaml
 koma:
@@ -135,97 +135,97 @@ koma:
   - <lora:comic_style_cumshot:{0.4|0.5|0.6|0.7|0.8}>{comic, cumshot, cum}
 ```
 
-#### Usage Example
+#### 使用例
 
-1. Download LoRA models from Civitai (they come with `.json` metadata files)
-2. Place all `.json` files in a folder (e.g., `/models/lora/metadata/`)
-3. In ComfyUI, add the LoRA Wildcard Generator node
-4. Set parameters:
+1. CivitaiからLoRAモデルをダウンロード（`.json` メタデータファイルが付属）
+2. すべての `.json` ファイルを1つのフォルダに配置（例：`/models/lora/metadata/`）
+3. ComfyUIで、LoRA Wildcard Generatorノードを追加
+4. パラメータを設定：
    - `json_folder`: `/models/lora/metadata/`
    - `wildcard_name`: `my_loras`
    - `output_folder`: `/wildcards/`
-5. Execute the workflow
-6. Generated file: `/wildcards/my_loras.yaml`
+5. ワークフローを実行
+6. 生成されるファイル：`/wildcards/my_loras.yaml`
 
-#### Wildcard Usage in Prompts
+#### プロンプトでのワイルドカード使用
 
-After generation, use in your prompts:
+生成後、プロンプトで使用：
 
-- Random LoRA: `__my_loras/all-my_loras__`
-- Specific LoRA: `__my_loras/2koma_V3__`
+- ランダムLoRA：`__my_loras/all-my_loras__`
+- 特定のLoRA：`__my_loras/2koma_V3__`
 
 ---
 
 ### 4. Civitai Bulk Downloader
 
-Batch download LoRA models from Civitai using URLs listed in a text file, with API authentication and automatic retry.
+テキストファイルにリストされたURLを使用して、CivitaiからLoRAモデルをバッチダウンロードします。API認証と自動リトライ機能付き。
 
-#### Inputs
+#### 入力
 
-- **txt_file_path** (STRING): Path to text file containing Civitai download URLs (one per line)
-- **output_file_path** (STRING): Output directory for downloaded LoRA files
-- **max_retries** (INT): Maximum retry attempts per file (default: 3, range: 1-10)
+- **txt_file_path** (STRING): CivitaiダウンロードURLを含むテキストファイルのパス（1行に1URL）
+- **output_file_path** (STRING): ダウンロードしたLoRAファイルの出力ディレクトリ
+- **max_retries** (INT): ファイルごとの最大リトライ回数（デフォルト：3、範囲：1-10）
 
-#### Outputs
+#### 出力
 
-- **status** (STRING): Detailed status with success/failure logs for each file
-- **summary** (STRING): Summary of download results (e.g., "Success: 15/20, Failed: 5/20")
+- **status** (STRING): 各ファイルの成功/失敗ログを含む詳細なステータス
+- **summary** (STRING): ダウンロード結果のサマリー（例：「成功: 15/20、失敗: 5/20」）
 
-#### Features
+#### 機能
 
-- ✅ Reads URLs from text file (one URL per line)
-- ✅ Civitai API authentication via `.env` configuration
-- ✅ Automatic retry with exponential backoff (2s, 4s, 8s, 16s...)
-- ✅ Progress tracking for large files (updates every 10MB)
-- ✅ Detailed logging of successes and failures
-- ✅ Extracts proper filenames from Content-Disposition headers
-- ✅ Standalone execution (OUTPUT_NODE enabled)
+- ✅ テキストファイルからURLを読み込み（1行に1URL）
+- ✅ `.env` 設定によるCivitai API認証
+- ✅ 指数バックオフによる自動リトライ（2秒、4秒、8秒、16秒...）
+- ✅ 大きなファイルの進行状況追跡（10MBごとに更新）
+- ✅ 成功と失敗の詳細ログ
+- ✅ Content-Dispositionヘッダーから適切なファイル名を抽出
+- ✅ スタンドアロン実行（OUTPUT_NODE有効）
 
 ---
 
-#### Civitai Bulk Downloader Setup
+#### Civitai Bulk Downloaderのセットアップ
 
-**Step 1: Get Your Civitai API Key**
+**ステップ1: Civitai APIキーを取得**
 
-1. Go to [Civitai](https://civitai.com/) and log in
-2. Navigate to your account settings:
-   - Click your profile icon → **Account Settings**
-   - Or go directly to: https://civitai.com/user/account
-3. Scroll to **API Keys** section
-4. Click **Add API Key** (or copy existing key)
-5. Copy the generated API key (it looks like: `a1b2c3d4e5f6g7h8i9j0...`)
+1. [Civitai](https://civitai.com/)にアクセスしてログイン
+2. アカウント設定に移動：
+   - プロフィールアイコンをクリック → **Account Settings**
+   - または直接アクセス：https://civitai.com/user/account
+3. **API Keys** セクションまでスクロール
+4. **Add API Key** をクリック（または既存のキーをコピー）
+5. 生成されたAPIキーをコピー（形式：`a1b2c3d4e5f6g7h8i9j0...`）
 
-**Step 2: Configure the .env File**
+**ステップ2: .envファイルを設定**
 
-1. In the `comfyui-samenodes` folder, locate `.env.example`
+1. `comfyui-samenodes` フォルダ内で `.env.example` を見つける
 
-2. Copy it to create `.env`:
+2. コピーして `.env` を作成：
    ```bash
    cp .env.example .env
    ```
 
-3. Open `.env` in a text editor:
+3. テキストエディタで `.env` を開く：
    ```bash
-   # On Windows
+   # Windowsの場合
    notepad .env
 
-   # On macOS
+   # macOSの場合
    open -e .env
 
-   # On Linux
+   # Linuxの場合
    nano .env
    ```
 
-4. Replace `your_api_key_here` with your actual API key:
+4. `your_api_key_here` を実際のAPIキーに置き換える：
    ```
    CIVITAI_API_KEY=a1b2c3d4e5f6g7h8i9j0your_actual_key_here
    ```
 
-5. Save the file
+5. ファイルを保存
 
-**Step 3: Create URL List File**
+**ステップ3: URLリストファイルを作成**
 
-Create a text file (e.g., `lora_urls.txt`) with Civitai download URLs:
+CivitaiダウンロードURLを含むテキストファイル（例：`lora_urls.txt`）を作成：
 
 ```
 https://civitai.com/api/download/models/1542418
@@ -234,30 +234,30 @@ https://civitai.com/api/download/models/1679497
 https://civitai.com/api/download/models/1686801
 ```
 
-**How to get download URLs:**
-1. Go to a LoRA model page on Civitai
-2. Click the **Download** button
-3. Right-click the download link and select **Copy Link Address**
-4. Paste into your text file
-5. Repeat for all models you want to download
+**ダウンロードURLの取得方法：**
+1. CivitaiのLoRAモデルページにアクセス
+2. **Download** ボタンをクリック
+3. ダウンロードリンクを右クリックして **リンクのアドレスをコピー** を選択
+4. テキストファイルに貼り付け
+5. ダウンロードしたいすべてのモデルについて繰り返す
 
-**Step 4: Use the Node in ComfyUI**
+**ステップ4: ComfyUIでノードを使用**
 
-1. Add the **Civitai Bulk Downloader** node to your workflow
-2. Set parameters:
+1. ワークフローに **Civitai Bulk Downloader** ノードを追加
+2. パラメータを設定：
    - **txt_file_path**: `/path/to/lora_urls.txt`
-   - **output_file_path**: `/models/lora/` (or your preferred LoRA folder)
-   - **max_retries**: `3` (or adjust as needed)
-3. Execute the workflow (Queue Prompt)
+   - **output_file_path**: `/models/lora/`（またはお好みのLoRAフォルダ）
+   - **max_retries**: `3`（または必要に応じて調整）
+3. ワークフローを実行（Queue Prompt）
 
-**Step 5: Monitor Progress**
+**ステップ5: 進行状況を監視**
 
-Check the console output for:
-- Download progress (updated every 10MB)
-- Success/failure status for each file
-- Final summary with counts
+コンソール出力で以下を確認：
+- ダウンロード進行状況（10MBごとに更新）
+- 各ファイルの成功/失敗ステータス
+- カウント付きの最終サマリー
 
-#### Example Console Output
+#### コンソール出力例
 
 ```
 ============================================================
@@ -291,74 +291,74 @@ Failed: 0
 ============================================================
 ```
 
-#### Troubleshooting
+#### トラブルシューティング
 
-**Error: "Civitai API key not configured"**
-- Make sure you renamed `.env.example` to `.env`
-- Check that `CIVITAI_API_KEY` is set in `.env`
-- Restart ComfyUI after editing `.env`
+**エラー：「Civitai API key not configured」**
+- `.env.example` を `.env` にリネームしたか確認
+- `.env` 内で `CIVITAI_API_KEY` が設定されているか確認
+- `.env` 編集後にComfyUIを再起動
 
-**Error: "Text file not found"**
-- Verify the `txt_file_path` is correct
-- Use absolute paths (e.g., `C:/Users/YourName/lora_urls.txt` on Windows)
+**エラー：「Text file not found」**
+- `txt_file_path` が正しいか確認
+- 絶対パスを使用（例：Windowsの場合 `C:/Users/YourName/lora_urls.txt`）
 
-**Downloads failing repeatedly:**
-- Check your internet connection
-- Verify your API key is valid
-- Increase `max_retries` parameter
-- Some models may require NSFW access enabled on your Civitai account
+**ダウンロードが繰り返し失敗する場合：**
+- インターネット接続を確認
+- APIキーが有効か確認
+- `max_retries` パラメータを増やす
+- 一部のモデルはCivitaiアカウントでNSFWアクセスを有効にする必要がある場合があります
 
-**Security Notes:**
-- ⚠️ Never commit the `.env` file to git (it's in `.gitignore` by default)
-- ⚠️ Never share your API key publicly
-- ⚠️ The API key grants access to your Civitai account
+**セキュリティに関する注意：**
+- ⚠️ `.env` ファイルをgitにコミットしない（デフォルトで `.gitignore` に含まれています）
+- ⚠️ APIキーを公開しない
+- ⚠️ APIキーはあなたのCivitaiアカウントへのアクセスを許可します
 
 ---
 
 ### 5. Extract Prompt from Image
 
-Extracts positive and negative prompts from image metadata (PNG info).
+画像メタデータ（PNG info）からポジティブおよびネガティブプロンプトを抽出します。
 
-#### Inputs
+#### 入力
 
-- **image_path** (STRING): Full path to the image file (e.g., `/path/to/image.png`)
+- **image_path** (STRING): 画像ファイルへのフルパス（例：`/path/to/image.png`）
 
-#### Outputs
+#### 出力
 
-- **positive** (STRING): Extracted positive prompt
-- **negative** (STRING): Extracted negative prompt
+- **positive** (STRING): 抽出されたポジティブプロンプト
+- **negative** (STRING): 抽出されたネガティブプロンプト
 
-#### Features
+#### 機能
 
-- ✅ Supports ComfyUI format images
-- ✅ Supports Automatic1111/SD WebUI format images
-- ✅ Automatically detects metadata format
-- ✅ Extracts both positive and negative prompts
-- ✅ Shows preview of extracted prompts in console
-- ✅ Returns empty strings if no metadata found
+- ✅ ComfyUI形式の画像をサポート
+- ✅ Automatic1111/SD WebUI形式の画像をサポート
+- ✅ メタデータフォーマットを自動検出
+- ✅ ポジティブとネガティブの両プロンプトを抽出
+- ✅ コンソールに抽出されたプロンプトのプレビューを表示
+- ✅ メタデータが見つからない場合は空文字列を返す
 
-#### Supported Image Formats
+#### サポートされる画像形式
 
-**ComfyUI Format:**
-- Images generated by ComfyUI contain `prompt` metadata key
-- Contains workflow and node information in JSON format
-- Extracts from CLIPTextEncode nodes
+**ComfyUI形式：**
+- ComfyUIで生成された画像には `prompt` メタデータキーが含まれる
+- JSON形式でワークフローとノード情報を含む
+- CLIPTextEncodeノードから抽出
 
-**Automatic1111 Format:**
-- Images generated by SD WebUI/Automatic1111
-- Contains `parameters` metadata key
-- Format: `positive\nNegative prompt: negative\nSteps: ...`
+**Automatic1111形式：**
+- SD WebUI/Automatic1111で生成された画像
+- `parameters` メタデータキーを含む
+- フォーマット：`positive\nNegative prompt: negative\nSteps: ...`
 
-#### Usage Example
+#### 使用例
 
-1. **Add Extract Prompt from Image** node to your workflow
-2. **Enter the full path** to your image file in the `image_path` input
-   - Example: `C:/Users/YourName/Pictures/output.png` (Windows)
-   - Example: `/home/user/images/output.png` (Linux/Mac)
-3. **Execute** to extract prompts
-4. **Connect outputs** to Show Text or other nodes to view/use prompts
+1. **Extract Prompt from Image** ノードをワークフローに追加
+2. `image_path` 入力に画像ファイルの **フルパス** を入力
+   - 例：`C:/Users/YourName/Pictures/output.png`（Windows）
+   - 例：`/home/user/images/output.png`（Linux/Mac）
+3. **実行** してプロンプトを抽出
+4. **出力を接続** してShow Textなど他のノードでプロンプトを表示/使用
 
-**Workflow Example:**
+**ワークフロー例：**
 ```
 [Extract Prompt from Image]
     image_path: "/path/to/your/image.png"
@@ -368,19 +368,19 @@ Extracts positive and negative prompts from image metadata (PNG info).
     [Show Text]
 ```
 
-**Why direct file path?**
-- ComfyUI's Load Image node converts images to tensors, losing metadata
-- Reading directly from file preserves PNG info chunk with prompts
+**なぜ直接ファイルパスなのか？**
+- ComfyUIのLoad Imageノードは画像をテンソルに変換し、メタデータが失われます
+- ファイルから直接読み込むことでプロンプトを含むPNG infoチャンクが保持されます
 
-#### Use Cases
+#### ユースケース
 
-- **Prompt Analysis**: Study successful prompts from generated images
-- **Prompt Reuse**: Extract and reuse prompts from favorite images
-- **Workflow Recreation**: Rebuild workflows from output images
-- **Prompt Library**: Build a library of effective prompts
-- **A/B Testing**: Compare prompts from different images
+- **プロンプト分析**: 生成された画像から成功したプロンプトを研究
+- **プロンプト再利用**: お気に入りの画像からプロンプトを抽出して再利用
+- **ワークフロー再作成**: 出力画像からワークフローを再構築
+- **プロンプトライブラリ**: 効果的なプロンプトのライブラリを構築
+- **A/Bテスト**: 異なる画像のプロンプトを比較
 
-#### Console Output Example
+#### コンソール出力例
 
 ```
 ============================================================
@@ -410,66 +410,66 @@ sitting on the floor with her back arched, hands resting...
 Negative preview: (multiple girls:1.4),(speech bubble:1.1),poorly drawn hands, poorly drawn feet,ugly, bad feet, bad hands, bad art, ugly artstyle, (bad anatomy:1.1), bad fingers...
 ```
 
-#### Limitations
+#### 制限事項
 
-- Only works with PNG images containing metadata
-- JPEG images don't preserve metadata
-- Some image editing tools may strip metadata
-- If no prompts found, returns empty strings
+- メタデータを含むPNG画像でのみ動作
+- JPEG画像はメタデータを保持しない
+- 一部の画像編集ツールはメタデータを削除する場合があります
+- プロンプトが見つからない場合、空文字列を返します
 
 ---
 
-## Project Structure
+## プロジェクト構造
 
 ```
 comfyui-samenodes/
-├── __init__.py                      # Node initialization and registration
-├── float_to_string.py               # Float to String node implementation
-├── batch_processor.py               # Batch Image Processor node implementation
-├── lora_wildcard_generator.py       # LoRA Wildcard Generator node implementation
-├── civitai_bulk_downloader.py       # Civitai Bulk Downloader node implementation
-├── extract_prompt_from_image.py     # Extract Prompt from Image node implementation
-├── .env.example                     # Environment variables template for Civitai API
-├── .env                             # Your actual environment variables (not in git)
-├── .gitignore                       # Git ignore rules (.env excluded)
-├── requirements.txt                 # Python dependencies
-├── README.md                        # This documentation file
-└── wildcards/                       # Example wildcards folder
-    └── clothing.yaml                # Example clothing wildcard
+├── __init__.py                      # ノードの初期化と登録
+├── float_to_string.py               # Float to Stringノードの実装
+├── batch_processor.py               # Batch Image Processorノードの実装
+├── lora_wildcard_generator.py       # LoRA Wildcard Generatorノードの実装
+├── civitai_bulk_downloader.py       # Civitai Bulk Downloaderノードの実装
+├── extract_prompt_from_image.py     # Extract Prompt from Imageノードの実装
+├── .env.example                     # Civitai API用の環境変数テンプレート
+├── .env                             # 実際の環境変数（gitには含まれません）
+├── .gitignore                       # Git ignoreルール（.envを除外）
+├── requirements.txt                 # Python依存関係
+├── README.md                        # このドキュメントファイル
+└── wildcards/                       # ワイルドカード例フォルダ
+    └── clothing.yaml                # 衣服ワイルドカード例
 ```
 
 ---
 
-## Requirements
+## 必要要件
 
-### System Requirements
+### システム要件
 
-- **Python**: 3.8 or higher
-- **ComfyUI**: Latest version recommended
+- **Python**: 3.8以上
+- **ComfyUI**: 最新版を推奨
 
-### Python Dependencies
+### Python依存関係
 
-The following packages are installed via `requirements.txt`:
+以下のパッケージが `requirements.txt` 経由でインストールされます：
 
-- **requests** (≥2.31.0): HTTP library for Civitai downloads
-- **python-dotenv** (≥1.0.0): Environment variable management for API keys
-- **pyyaml** (≥6.0): YAML file processing for wildcard generation
-- **Pillow** (≥9.0.0): Image processing and metadata extraction
+- **requests** (≥2.31.0): Civitaiダウンロード用のHTTPライブラリ
+- **python-dotenv** (≥1.0.0): APIキー用の環境変数管理
+- **pyyaml** (≥6.0): ワイルドカード生成用のYAMLファイル処理
+- **Pillow** (≥9.0.0): 画像処理とメタデータ抽出
 
-Install all dependencies:
+すべての依存関係をインストール：
 ```bash
 pip install -r requirements.txt
 ```
 
 ---
 
-## Contributing
+## コントリビューション
 
-Contributions are welcome! Please feel free to submit issues or pull requests.
+コントリビューションを歓迎します！イシューやプルリクエストをお気軽に送信してください。
 
 ---
 
-## License
+## ライセンス
 
 MIT License
 
@@ -483,11 +483,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ---
 
-## Support
+## サポート
 
-For issues, questions, or feature requests, please open an issue on the GitHub repository.
+問題、質問、機能リクエストについては、GitHubリポジトリでイシューを開いてください。
 
-**Useful Links:**
+**便利なリンク：**
 - [ComfyUI](https://github.com/comfyanonymous/ComfyUI)
 - [Civitai](https://civitai.com/)
 - [Civitai API Documentation](https://github.com/civitai/civitai/wiki/REST-API-Reference)
