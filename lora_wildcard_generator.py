@@ -241,7 +241,7 @@ class LoraWildcardGenerator:
 
             # Parse all JSON files
             entries = []
-            skipped = 0
+            skipped_files = []
 
             for json_file in json_files:
                 print(f"Processing: {json_file.name}")
@@ -252,8 +252,8 @@ class LoraWildcardGenerator:
                     print(f"  ✓ Extracted: {entry['lora_name']}")
                     print(f"    Triggers: {', '.join(entry['trained_words'])}")
                 else:
-                    skipped += 1
-                    print(f"  ✗ Skipped (no trainedWords found)")
+                    skipped_files.append(json_file.name)
+                    print(f"  ✗ Skipped: {json_file.name} (no trainedWords found)")
 
             if not entries:
                 return ("No valid entries found in JSON files", 0)
@@ -278,8 +278,9 @@ class LoraWildcardGenerator:
             print(f"✓ Wildcard file generated successfully!")
             print(f"Output: {yaml_filepath}")
             print(f"Entries: {len(entries)}")
-            if skipped > 0:
-                print(f"Skipped: {skipped} files")
+            if skipped_files:
+                print(f"Skipped: {len(skipped_files)} files")
+                print(f"Skipped files: {', '.join(skipped_files)}")
             print(f"{'='*60}\n")
 
             # Preview first few entries
@@ -295,8 +296,8 @@ class LoraWildcardGenerator:
                 print()
 
             status = f"Generated {len(entries)} entries in {yaml_filename}"
-            if skipped > 0:
-                status += f" ({skipped} skipped)"
+            if skipped_files:
+                status += f" ({len(skipped_files)} skipped: {', '.join(skipped_files)})"
 
             return (status, len(entries))
 
