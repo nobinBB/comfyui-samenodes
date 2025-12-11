@@ -89,9 +89,6 @@ class LoraWildcardGenerator:
             civitai = data.get('civitai', {})
             trained_words = civitai.get('trainedWords', [])
 
-            if not trained_words:
-                return None
-
             # Get filename without extension for LoRA name
             lora_name = json_path.stem
 
@@ -142,7 +139,11 @@ class LoraWildcardGenerator:
 
         # Wrap trigger words in braces and generate LoRA syntax
         # Format: <lora:name:{0.4|0.5|0.6|0.7|0.8}>{trigger words}
-        lora_syntax = f"<lora:{lora_name}:{{0.4|0.5|0.6|0.7|0.8}}>{{{words}}}"
+        # If no trigger words, omit the braces entirely
+        if words:
+            lora_syntax = f"<lora:{lora_name}:{{0.4|0.5|0.6|0.7|0.8}}>{{{words}}}"
+        else:
+            lora_syntax = f"<lora:{lora_name}:{{0.4|0.5|0.6|0.7|0.8}}>"
 
         return lora_syntax
 
@@ -250,10 +251,11 @@ class LoraWildcardGenerator:
                 if entry:
                     entries.append(entry)
                     print(f"  ✓ Extracted: {entry['lora_name']}")
-                    print(f"    Triggers: {', '.join(entry['trained_words'])}")
+                    triggers = ', '.join(entry['trained_words']) if entry['trained_words'] else '(none)'
+                    print(f"    Triggers: {triggers}")
                 else:
                     skipped_files.append(json_file.name)
-                    print(f"  ✗ Skipped: {json_file.name} (no trainedWords found)")
+                    print(f"  ✗ Skipped: {json_file.name} (parse error)")
 
             if not entries:
                 return ("No valid entries found in JSON files", 0)
