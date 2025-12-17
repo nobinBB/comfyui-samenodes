@@ -54,6 +54,7 @@ class CyclicIncrement:
     RETURN_NAMES = ("value",)
     FUNCTION = "get_value"
     CATEGORY = "utils/increment"
+    OUTPUT_NODE = False
 
     def get_value(self, start_value, cycle_length, increment, unique_id=None):
         """
@@ -70,17 +71,21 @@ class CyclicIncrement:
         """
         current_time = time.time()
 
+        # Use a global key if unique_id is not provided
+        node_key = unique_id if unique_id is not None else "global"
+
         # Initialize state for this node if it doesn't exist
-        if unique_id not in _node_states:
-            _node_states[unique_id] = {
+        if node_key not in _node_states:
+            _node_states[node_key] = {
                 "counter": 0,
                 "start_value": start_value,
                 "cycle_length": cycle_length,
                 "last_time": current_time
             }
+            print(f"[CyclicIncrement] Initialized node {node_key} with counter=0")
 
         # Get current state
-        state = _node_states[unique_id]
+        state = _node_states[node_key]
 
         # Check if too much time elapsed (indicates new queue execution)
         time_elapsed = current_time - state.get("last_time", current_time)
@@ -88,6 +93,7 @@ class CyclicIncrement:
         if time_elapsed > QUEUE_TIMEOUT:
             # New queue execution detected - reset counter
             state["counter"] = 0
+            print(f"[CyclicIncrement] Timeout detected ({time_elapsed:.1f}s), reset counter to 0")
 
         # Update last execution time
         state["last_time"] = current_time
@@ -97,6 +103,7 @@ class CyclicIncrement:
             state["counter"] = 0
             state["start_value"] = start_value
             state["cycle_length"] = cycle_length
+            print(f"[CyclicIncrement] Parameters changed, reset counter to 0")
 
         # Get current counter value
         counter = state["counter"]
@@ -107,6 +114,8 @@ class CyclicIncrement:
         # Calculate current value
         current_value = start_value + position
 
+        print(f"[CyclicIncrement] Node {node_key}: counter={counter}, position={position}, value={current_value}, increment={increment}")
+
         # Increment counter if enabled
         if increment:
             state["counter"] = counter + 1
@@ -114,12 +123,14 @@ class CyclicIncrement:
         return (current_value,)
 
     @classmethod
-    def IS_CHANGED(cls, **kwargs):
+    def IS_CHANGED(cls, start_value, cycle_length, increment, **kwargs):
         """
         Force ComfyUI to re-execute this node when increment is enabled
         """
-        # Always return NaN to force execution every time
-        return float("nan")
+        if increment:
+            # Return a unique value every time to force execution
+            return float("nan")
+        return start_value
 
 
 # Node display name mapping
