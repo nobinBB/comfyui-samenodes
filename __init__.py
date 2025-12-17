@@ -1,6 +1,6 @@
 """
 ComfyUI Same Nodes - Custom Nodes Package
-Float to String conversion utilities, Batch Image Processor, LoRA Wildcard Generator, Civitai Bulk Downloader, and Extract Prompt from Image
+Float to String conversion utilities, Batch Image Processor, LoRA Wildcard Generator, Civitai Bulk Downloader, Extract Prompt from Image, Queue Empty Checker, and Cyclic Increment
 """
 
 from .float_to_string import NODE_CLASS_MAPPINGS as FLOAT_MAPPINGS
@@ -17,6 +17,8 @@ from .repeat_text_lines import NODE_CLASS_MAPPINGS as REPEAT_MAPPINGS
 from .repeat_text_lines import NODE_DISPLAY_NAME_MAPPINGS as REPEAT_DISPLAY_MAPPINGS
 from .queue_empty_checker import NODE_CLASS_MAPPINGS as QUEUE_MAPPINGS
 from .queue_empty_checker import NODE_DISPLAY_NAME_MAPPINGS as QUEUE_DISPLAY_MAPPINGS
+from .cyclic_increment import NODE_CLASS_MAPPINGS as CYCLIC_MAPPINGS
+from .cyclic_increment import NODE_DISPLAY_NAME_MAPPINGS as CYCLIC_DISPLAY_MAPPINGS
 
 
 
@@ -29,7 +31,7 @@ NODE_CLASS_MAPPINGS = {
     **EXTRACT_MAPPINGS,
     **REPEAT_MAPPINGS,
     **QUEUE_MAPPINGS,
-
+    **CYCLIC_MAPPINGS,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -38,9 +40,9 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     **LORA_DISPLAY_MAPPINGS,
     **CIVITAI_DISPLAY_MAPPINGS,
     **EXTRACT_DISPLAY_MAPPINGS,
-    **REPEAT_DISPLAY_MAPPINGS,  
+    **REPEAT_DISPLAY_MAPPINGS,
     **QUEUE_DISPLAY_MAPPINGS,
-
+    **CYCLIC_DISPLAY_MAPPINGS,
 }
 
 # Export the mappings for ComfyUI to discover
