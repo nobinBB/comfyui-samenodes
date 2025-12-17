@@ -15,17 +15,21 @@ from .extract_prompt_from_image import NODE_CLASS_MAPPINGS as EXTRACT_MAPPINGS
 from .extract_prompt_from_image import NODE_DISPLAY_NAME_MAPPINGS as EXTRACT_DISPLAY_MAPPINGS
 from .repeat_text_lines import NODE_CLASS_MAPPINGS as REPEAT_MAPPINGS
 from .repeat_text_lines import NODE_DISPLAY_NAME_MAPPINGS as REPEAT_DISPLAY_MAPPINGS
+from .queue_empty_checker import NODE_CLASS_MAPPINGS as QUEUE_MAPPINGS
+from .queue_empty_checker import NODE_DISPLAY_NAME_MAPPINGS as QUEUE_DISPLAY_MAPPINGS
 
 
 
-# Combine all node mappings
+
 NODE_CLASS_MAPPINGS = {
     **FLOAT_MAPPINGS,
     **BATCH_MAPPINGS,
     **LORA_MAPPINGS,
     **CIVITAI_MAPPINGS,
     **EXTRACT_MAPPINGS,
-     **REPEAT_MAPPINGS,
+    **REPEAT_MAPPINGS,
+    **QUEUE_MAPPINGS,
+
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -34,7 +38,9 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     **LORA_DISPLAY_MAPPINGS,
     **CIVITAI_DISPLAY_MAPPINGS,
     **EXTRACT_DISPLAY_MAPPINGS,
-    **REPEAT_DISPLAY_MAPPINGS, 
+    **REPEAT_DISPLAY_MAPPINGS,  
+    **QUEUE_DISPLAY_MAPPINGS,
+
 }
 
 # Export the mappings for ComfyUI to discover
