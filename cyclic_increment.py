@@ -9,8 +9,9 @@ import time
 # Structure: {unique_id: {"counter": int, "start_value": int, "cycle_length": int, "last_time": float}}
 _node_states = {}
 
-# Timeout in seconds to detect new queue execution (default: 10 seconds)
-QUEUE_TIMEOUT = 10.0
+# Timeout in seconds to detect new queue execution (default: 120 seconds)
+# Set this higher than your longest single image generation time
+QUEUE_TIMEOUT = 120.0
 
 class CyclicIncrement:
     """
@@ -19,7 +20,7 @@ class CyclicIncrement:
 
     IMPORTANT:
     - When cycle_length or start_value changes, the counter resets to 0
-    - When more than 10 seconds elapse between executions, the counter automatically resets to 0
+    - When more than 120 seconds (2 minutes) elapse between executions, the counter automatically resets to 0
       (this typically indicates a new queue/batch execution)
     """
 
