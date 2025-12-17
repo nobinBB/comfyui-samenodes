@@ -3,14 +3,14 @@ Cyclic Increment Node for ComfyUI
 Increments a value and cycles back to start after specified iterations
 """
 
+# Global dictionary to store counters for each node instance
+_counters = {}
+
 class CyclicIncrement:
     """
     A node that increments a value and cycles back to start_value after cycle_length iterations
     Example: start_value=1, cycle_length=4 -> 1, 2, 3, 4, 1, 2, 3, 4...
     """
-
-    # Class-level counter to track iterations
-    counter = 0
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -34,6 +34,9 @@ class CyclicIncrement:
                     "default": True
                 }),
             },
+            "hidden": {
+                "unique_id": "UNIQUE_ID",
+            },
         }
 
     RETURN_TYPES = ("INT",)
@@ -41,7 +44,7 @@ class CyclicIncrement:
     FUNCTION = "get_value"
     CATEGORY = "utils/increment"
 
-    def get_value(self, start_value, cycle_length, increment):
+    def get_value(self, start_value, cycle_length, increment, unique_id=None):
         """
         Get the current value in the cycle
 
@@ -49,31 +52,37 @@ class CyclicIncrement:
             start_value: Starting value of the cycle
             cycle_length: Number of iterations before cycling back to start
             increment: Whether to increment the counter for next execution
+            unique_id: Unique identifier for this node instance (provided by ComfyUI)
 
         Returns:
             Current value in the cycle
         """
+        # Use unique_id to track counter per node instance
+        if unique_id not in _counters:
+            _counters[unique_id] = 0
+
+        # Get current counter value for this node
+        counter = _counters[unique_id]
+
         # Calculate current position in the cycle (0 to cycle_length-1)
-        position = self.counter % cycle_length
+        position = counter % cycle_length
 
         # Calculate current value
         current_value = start_value + position
 
         # Increment counter if enabled
         if increment:
-            CyclicIncrement.counter += 1
+            _counters[unique_id] = counter + 1
 
         return (current_value,)
 
     @classmethod
-    def IS_CHANGED(cls, start_value, cycle_length, increment):
+    def IS_CHANGED(cls, **kwargs):
         """
         Force ComfyUI to re-execute this node when increment is enabled
         """
-        if increment:
-            # Return NaN to force execution every time
-            return float("nan")
-        return cls.counter
+        # Always return NaN to force execution every time
+        return float("nan")
 
 
 # Node display name mapping
