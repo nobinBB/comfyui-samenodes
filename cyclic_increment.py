@@ -6,8 +6,11 @@ Increments a value and cycles back to start after specified iterations
 import time
 
 # Global dictionary to store counters and parameters for each node instance
-# Structure: {unique_id: {"counter": int, "start_value": int, "cycle_length": int, "last_prompt": str, "last_time": float}}
+# Structure: {unique_id: {"counter": int, "start_value": int, "cycle_length": int, "last_time": float}}
 _node_states = {}
+
+# Timeout in seconds to detect new queue execution (default: 10 seconds)
+QUEUE_TIMEOUT = 10.0
 
 class CyclicIncrement:
     """
@@ -16,7 +19,8 @@ class CyclicIncrement:
 
     IMPORTANT:
     - When cycle_length or start_value changes, the counter resets to 0
-    - When a new queue/batch execution starts, the counter automatically resets to 0
+    - When more than 10 seconds elapse between executions, the counter automatically resets to 0
+      (this typically indicates a new queue/batch execution)
     """
 
     @classmethod
@@ -43,7 +47,6 @@ class CyclicIncrement:
             },
             "hidden": {
                 "unique_id": "UNIQUE_ID",
-                "prompt": "PROMPT",
             },
         }
 
@@ -52,7 +55,7 @@ class CyclicIncrement:
     FUNCTION = "get_value"
     CATEGORY = "utils/increment"
 
-    def get_value(self, start_value, cycle_length, increment, unique_id=None, prompt=None):
+    def get_value(self, start_value, cycle_length, increment, unique_id=None):
         """
         Get the current value in the cycle
 
@@ -61,13 +64,10 @@ class CyclicIncrement:
             cycle_length: Number of iterations before cycling back to start
             increment: Whether to increment the counter for next execution
             unique_id: Unique identifier for this node instance (provided by ComfyUI)
-            prompt: Prompt information containing prompt_id (provided by ComfyUI)
 
         Returns:
             Current value in the cycle
         """
-        # Get prompt_id to detect new queue executions
-        prompt_id = str(prompt) if prompt is not None else None
         current_time = time.time()
 
         # Initialize state for this node if it doesn't exist
@@ -76,24 +76,18 @@ class CyclicIncrement:
                 "counter": 0,
                 "start_value": start_value,
                 "cycle_length": cycle_length,
-                "last_prompt": prompt_id,
                 "last_time": current_time
             }
 
         # Get current state
         state = _node_states[unique_id]
 
-        # Check if this is a new queue execution (prompt_id changed or timeout)
-        # Reset counter if:
-        # 1. prompt_id changed (new queue execution)
-        # 2. More than 3 seconds elapsed since last execution (likely a new batch)
+        # Check if too much time elapsed (indicates new queue execution)
         time_elapsed = current_time - state.get("last_time", current_time)
-        prompt_changed = prompt_id != state.get("last_prompt")
 
-        if prompt_changed or time_elapsed > 3.0:
+        if time_elapsed > QUEUE_TIMEOUT:
             # New queue execution detected - reset counter
             state["counter"] = 0
-            state["last_prompt"] = prompt_id
 
         # Update last execution time
         state["last_time"] = current_time
