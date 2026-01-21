@@ -62,6 +62,10 @@ class LoraWildcardGenerator:
                     "default": "wildcards",
                     "multiline": False
                 }),
+                # Include subfolders
+                "include_subfolders": ("BOOLEAN", {
+                    "default": False
+                }),
             },
         }
 
@@ -207,7 +211,7 @@ class LoraWildcardGenerator:
 
         return yaml_content
 
-    def generate_wildcard(self, json_folder, wildcard_name, output_folder):
+    def generate_wildcard(self, json_folder, wildcard_name, output_folder, include_subfolders):
         """
         Generate YAML wildcard file from JSON files
 
@@ -215,6 +219,7 @@ class LoraWildcardGenerator:
             json_folder: Folder containing JSON files with Civitai metadata
             wildcard_name: Name for the wildcard (used as filename)
             output_folder: Folder to save the YAML file
+            include_subfolders: Whether to search subfolders recursively
 
         Returns:
             Tuple of (status_message, entry_count)
@@ -228,8 +233,11 @@ class LoraWildcardGenerator:
             if not folder.is_dir():
                 return (f"Error: Path is not a directory: {json_folder}", 0)
 
-            # Find all JSON files
-            json_files = list(folder.glob('*.json'))
+            # Find all JSON files (with or without subfolders)
+            if include_subfolders:
+                json_files = list(folder.rglob('*.json'))  # Recursive search
+            else:
+                json_files = list(folder.glob('*.json'))   # Current folder only
 
             if not json_files:
                 return (f"No JSON files found in: {json_folder}", 0)
@@ -237,6 +245,7 @@ class LoraWildcardGenerator:
             print(f"\n{'='*60}")
             print(f"Processing JSON files for LoRA wildcards...")
             print(f"JSON folder: {json_folder}")
+            print(f"Include subfolders: {include_subfolders}")
             print(f"Found {len(json_files)} JSON files")
             print(f"{'='*60}\n")
 

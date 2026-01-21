@@ -16,11 +16,8 @@ from .extract_prompt_from_image import NODE_DISPLAY_NAME_MAPPINGS as EXTRACT_DIS
 from .repeat_text_lines import NODE_CLASS_MAPPINGS as REPEAT_MAPPINGS
 from .repeat_text_lines import NODE_DISPLAY_NAME_MAPPINGS as REPEAT_DISPLAY_MAPPINGS
 
-
-
 from .prompt_extractor_posneg import NODE_CLASS_MAPPINGS as POSNEG_MAPPINGS
 from .prompt_extractor_posneg import NODE_DISPLAY_NAME_MAPPINGS as POSNEG_DISPLAY_MAPPINGS
-
 
 
 
@@ -32,6 +29,7 @@ NODE_CLASS_MAPPINGS = {
     **EXTRACT_MAPPINGS,
     **REPEAT_MAPPINGS,
     **POSNEG_MAPPINGS,
+    
 
 }
 
