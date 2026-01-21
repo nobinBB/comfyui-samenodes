@@ -188,7 +188,7 @@ class LoraWildcardGenerator:
         all_entry = "{" + "|".join(all_lora_refs) + "}"
 
         # Wrap in FoldedString for >- YAML format (newline-based)
-        all_entry_folded = FoldedString(all_entry)
+        all_entry_folded = all_entry
 
         # Create final dictionary with wildcard_name as top-level key
         # Order: wildcard_name -> all-<wildcard_name> first, then individual entries
