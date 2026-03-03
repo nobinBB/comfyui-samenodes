@@ -1,3 +1,7 @@
+"""
+ComfyUI Same Nodes - Custom Nodes Package
+Float to String conversion utilities, Batch Image Processor, LoRA Wildcard Generator, Embedding Wildcard Generator, Civitai Bulk Downloader, Extract Prompt from Image, and Prompt Extractor PosNeg
+"""
 from .float_to_string import NODE_CLASS_MAPPINGS as FLOAT_MAPPINGS
 from .float_to_string import NODE_DISPLAY_NAME_MAPPINGS as FLOAT_DISPLAY_MAPPINGS
 
@@ -6,6 +10,9 @@ from .batch_processor import NODE_DISPLAY_NAME_MAPPINGS as BATCH_DISPLAY_MAPPING
 
 from .lora_wildcard_generator import NODE_CLASS_MAPPINGS as LORA_MAPPINGS
 from .lora_wildcard_generator import NODE_DISPLAY_NAME_MAPPINGS as LORA_DISPLAY_MAPPINGS
+
+from .embedding_wildcard_generator import NODE_CLASS_MAPPINGS as EMBEDDING_MAPPINGS
+from .embedding_wildcard_generator import NODE_DISPLAY_NAME_MAPPINGS as EMBEDDING_DISPLAY_MAPPINGS
 
 from .civitai_bulk_downloader import NODE_CLASS_MAPPINGS as CIVITAI_MAPPINGS
 from .civitai_bulk_downloader import NODE_DISPLAY_NAME_MAPPINGS as CIVITAI_DISPLAY_MAPPINGS
@@ -25,11 +32,12 @@ NODE_CLASS_MAPPINGS = {
     **FLOAT_MAPPINGS,
     **BATCH_MAPPINGS,
     **LORA_MAPPINGS,
+    **EMBEDDING_MAPPINGS,
     **CIVITAI_MAPPINGS,
     **EXTRACT_MAPPINGS,
     **REPEAT_MAPPINGS,
     **POSNEG_MAPPINGS,
-    
+
 
 }
 
@@ -37,6 +45,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     **FLOAT_DISPLAY_MAPPINGS,
     **BATCH_DISPLAY_MAPPINGS,
     **LORA_DISPLAY_MAPPINGS,
+    **EMBEDDING_DISPLAY_MAPPINGS,
     **CIVITAI_DISPLAY_MAPPINGS,
     **EXTRACT_DISPLAY_MAPPINGS,
     **REPEAT_DISPLAY_MAPPINGS,
