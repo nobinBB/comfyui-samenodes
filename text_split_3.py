@@ -65,6 +65,12 @@ class TextSplit3:
         text_2 = " ".join([m.strip() for m in matches_2 if m.strip()])
         text_3 = " ".join([m.strip() for m in matches_3 if m.strip()])
 
+        # Add trailing comma to text_2 and text_3 if not empty
+        if text_2:
+            text_2 = text_2 + ","
+        if text_3:
+            text_3 = text_3 + ","
+
         # Remove all <!...!> and <#...#> blocks from original text for text_1
         text_1 = re.sub(pattern_2, "", text, flags=re.DOTALL)
         text_1 = re.sub(pattern_3, "", text_1, flags=re.DOTALL)
