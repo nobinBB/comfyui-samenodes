@@ -84,41 +84,54 @@ class EmbeddingPathResolver:
 
     def _scan_embeddings(self):
         """
-        Scan the embeddings folder recursively and build a mapping
+        Scan all embeddings folders recursively and build a mapping
         from basename (without extension) to relative path.
 
         Returns:
             dict: {basename: relative_path_with_extension}
         """
-        embeddings_folder = self._get_embeddings_folder()
-
-        if not embeddings_folder:
-            print(f"[EmbeddingPathResolver] Warning: embeddings folder not found (searched in models/embeddings)")
-            return {}
-
-        if not embeddings_folder.exists():
-            print(f"[EmbeddingPathResolver] Warning: embeddings folder does not exist: {embeddings_folder}")
-            return {}
-
-        print(f"[EmbeddingPathResolver] Scanning embeddings in: {embeddings_folder}")
-
         embedding_map = {}
+        folders_to_scan = []
 
-        # Recursively scan for embedding files
-        for file_path in embeddings_folder.rglob("*"):
-            if file_path.is_file() and file_path.suffix.lower() in self.EMBEDDING_EXTENSIONS:
-                # Get basename without extension
-                basename = file_path.stem
+        # Get all embeddings folders from folder_paths
+        if HAS_FOLDER_PATHS:
+            try:
+                embeddings_dirs = folder_paths.get_folder_paths("embeddings")
+                if embeddings_dirs:
+                    folders_to_scan = [Path(d) for d in embeddings_dirs if Path(d).exists()]
+                    print(f"[EmbeddingPathResolver] Found {len(folders_to_scan)} embeddings folder(s) from folder_paths")
+            except Exception as e:
+                print(f"[EmbeddingPathResolver] Error using folder_paths: {e}")
 
-                # Get relative path from embeddings folder
-                relative_path = file_path.relative_to(embeddings_folder)
+        # Fallback: Try to find embeddings folder manually
+        if not folders_to_scan:
+            embeddings_folder = self._get_embeddings_folder()
+            if embeddings_folder and embeddings_folder.exists():
+                folders_to_scan = [embeddings_folder]
 
-                # Convert to string with forward slashes (cross-platform)
-                relative_path_str = str(relative_path).replace('\\', '/')
+        if not folders_to_scan:
+            print(f"[EmbeddingPathResolver] Warning: No embeddings folders found")
+            return {}
 
-                # Store first occurrence only (in case of duplicates)
-                if basename not in embedding_map:
-                    embedding_map[basename] = relative_path_str
+        # Scan all folders
+        for embeddings_folder in folders_to_scan:
+            print(f"[EmbeddingPathResolver] Scanning: {embeddings_folder}")
+
+            # Recursively scan for embedding files
+            for file_path in embeddings_folder.rglob("*"):
+                if file_path.is_file() and file_path.suffix.lower() in self.EMBEDDING_EXTENSIONS:
+                    # Get basename without extension
+                    basename = file_path.stem
+
+                    # Get relative path from embeddings folder
+                    relative_path = file_path.relative_to(embeddings_folder)
+
+                    # Convert to string with forward slashes (cross-platform)
+                    relative_path_str = str(relative_path).replace('\\', '/')
+
+                    # Store first occurrence only (in case of duplicates)
+                    if basename not in embedding_map:
+                        embedding_map[basename] = relative_path_str
 
         return embedding_map
 
