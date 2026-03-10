@@ -126,8 +126,12 @@ class EmbeddingPathResolver:
                     # Get relative path from embeddings folder
                     relative_path = file_path.relative_to(embeddings_folder)
 
+                    # Remove extension from the relative path
+                    # Keep directory structure but remove extension from filename
+                    relative_path_without_ext = relative_path.parent / file_path.stem
+
                     # Convert to string with forward slashes (cross-platform)
-                    relative_path_str = str(relative_path).replace('\\', '/')
+                    relative_path_str = str(relative_path_without_ext).replace('\\', '/')
 
                     # Store first occurrence only (in case of duplicates)
                     if basename not in embedding_map:
