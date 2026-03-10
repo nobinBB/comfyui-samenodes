@@ -7,6 +7,12 @@ import os
 import re
 from pathlib import Path
 
+try:
+    import folder_paths
+    HAS_FOLDER_PATHS = True
+except ImportError:
+    HAS_FOLDER_PATHS = False
+
 
 class EmbeddingPathResolver:
     """
@@ -46,9 +52,21 @@ class EmbeddingPathResolver:
     def _get_embeddings_folder(self):
         """
         Get the embeddings folder path.
-        Tries to find ComfyUI's models/embeddings folder.
+        Uses ComfyUI's folder_paths module if available.
         """
-        # Try to find ComfyUI root directory
+        # Try using ComfyUI's folder_paths module first
+        if HAS_FOLDER_PATHS:
+            try:
+                embeddings_dir = folder_paths.get_folder_paths("embeddings")
+                if embeddings_dir and len(embeddings_dir) > 0:
+                    # Use first embeddings folder
+                    embeddings_path = Path(embeddings_dir[0])
+                    if embeddings_path.exists():
+                        return embeddings_path
+            except Exception as e:
+                print(f"[EmbeddingPathResolver] Error using folder_paths: {e}")
+
+        # Fallback: Try to find ComfyUI root directory manually
         current_dir = Path(__file__).resolve().parent
 
         # Search upward for models/embeddings folder
@@ -66,35 +84,54 @@ class EmbeddingPathResolver:
 
     def _scan_embeddings(self):
         """
-        Scan the embeddings folder recursively and build a mapping
+        Scan all embeddings folders recursively and build a mapping
         from basename (without extension) to relative path.
 
         Returns:
             dict: {basename: relative_path_with_extension}
         """
-        embeddings_folder = self._get_embeddings_folder()
+        embedding_map = {}
+        folders_to_scan = []
 
-        if not embeddings_folder or not embeddings_folder.exists():
-            print(f"[EmbeddingPathResolver] Warning: embeddings folder not found")
+        # Get all embeddings folders from folder_paths
+        if HAS_FOLDER_PATHS:
+            try:
+                embeddings_dirs = folder_paths.get_folder_paths("embeddings")
+                if embeddings_dirs:
+                    folders_to_scan = [Path(d) for d in embeddings_dirs if Path(d).exists()]
+                    print(f"[EmbeddingPathResolver] Found {len(folders_to_scan)} embeddings folder(s) from folder_paths")
+            except Exception as e:
+                print(f"[EmbeddingPathResolver] Error using folder_paths: {e}")
+
+        # Fallback: Try to find embeddings folder manually
+        if not folders_to_scan:
+            embeddings_folder = self._get_embeddings_folder()
+            if embeddings_folder and embeddings_folder.exists():
+                folders_to_scan = [embeddings_folder]
+
+        if not folders_to_scan:
+            print(f"[EmbeddingPathResolver] Warning: No embeddings folders found")
             return {}
 
-        embedding_map = {}
+        # Scan all folders
+        for embeddings_folder in folders_to_scan:
+            print(f"[EmbeddingPathResolver] Scanning: {embeddings_folder}")
 
-        # Recursively scan for embedding files
-        for file_path in embeddings_folder.rglob("*"):
-            if file_path.is_file() and file_path.suffix.lower() in self.EMBEDDING_EXTENSIONS:
-                # Get basename without extension
-                basename = file_path.stem
+            # Recursively scan for embedding files
+            for file_path in embeddings_folder.rglob("*"):
+                if file_path.is_file() and file_path.suffix.lower() in self.EMBEDDING_EXTENSIONS:
+                    # Get basename without extension
+                    basename = file_path.stem
 
-                # Get relative path from embeddings folder
-                relative_path = file_path.relative_to(embeddings_folder)
+                    # Get relative path from embeddings folder
+                    relative_path = file_path.relative_to(embeddings_folder)
 
-                # Convert to string with forward slashes (cross-platform)
-                relative_path_str = str(relative_path).replace('\\', '/')
+                    # Convert to string with forward slashes (cross-platform)
+                    relative_path_str = str(relative_path).replace('\\', '/')
 
-                # Store first occurrence only (in case of duplicates)
-                if basename not in embedding_map:
-                    embedding_map[basename] = relative_path_str
+                    # Store first occurrence only (in case of duplicates)
+                    if basename not in embedding_map:
+                        embedding_map[basename] = relative_path_str
 
         return embedding_map
 
@@ -153,9 +190,11 @@ class EmbeddingPathResolver:
             # Look up the embedding in our map
             if embedding_name in embedding_map:
                 resolved_path = embedding_map[embedding_name]
+                print(f"[EmbeddingPathResolver] Resolved: {embedding_name} -> {resolved_path}")
                 return f"embedding:{resolved_path}"
             else:
                 # Not found, keep original
+                print(f"[EmbeddingPathResolver] Not found: {embedding_name}")
                 return match.group(0)
 
         # Perform replacement
