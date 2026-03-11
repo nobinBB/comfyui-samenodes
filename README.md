@@ -6,13 +6,25 @@ ComfyUIのワークフローを強化する、文字列変換、バッチ処理�
 
 このカスタムノードパックは、ComfyUIユーザーに必須のツールを提供します：
 
+### テキスト処理
 - **Float to String**: 小数点以下の桁数を制御できる精密な浮動小数点から文字列への変換
+- **Text Split 3**: テキストを3つの出力に分割（`<!...!>` と `<#...#>` デリミタ対応）
+- **Repeat Text Lines**: テキストを指定回数繰り返す
+
+### 画像・プロンプト処理
 - **Batch Image Processor**: 効率的なバッチ画像処理
+- **Extract Prompt from Image**: 画像メタデータからプロンプトを抽出（ComfyUI形式）
+- **A1111 Prompt Splitter**: A1111/SD WebUI画像からポジティブ・ネガティブプロンプトを抽出
+
+### LoRA管理
 - **LoRA Wildcard Generator**: Civitaiメタデータから自動的にYAMLワイルドカードを生成
 - **Civitai Bulk Downloader**: CivitaiからLoRAモデルをAPI認証付きでバッチダウンロード
-- **Extract Prompt from Image**: 画像メタデータからポジティブ・ネガティブプロンプトを抽出
 
-これらのノードは、特にLoRAモデル、ワイルドカード、プロンプト、バッチ操作を扱う際に、ComfyUIのワークフローを効率化するよう設計されています。
+### Embedding管理
+- **Embedding Wildcard Generator**: Embeddingファイルから自動的にYAMLワイルドカードを生成
+- **Embedding Path Resolver**: `embedding:name` を `embedding:path/name` に自動解決
+
+これらのノードは、特にLoRAモデル、Embedding、ワイルドカード、プロンプト、バッチ操作を扱う際に、ComfyUIのワークフローを効率化するよう設計されています。
 
 ---
 
@@ -419,6 +431,281 @@ Negative preview: (multiple girls:1.4),(speech bubble:1.1),poorly drawn hands, p
 
 ---
 
+### 6. A1111 Prompt Splitter (Pos/Neg)
+
+Automatic1111/SD WebUI形式の画像メタデータからポジティブ・ネガティブプロンプトをバッチ処理で抽出します。
+
+#### 入力
+
+- **file_path** (STRING, forceInput): PNG画像ファイルのパス（複数可、リスト対応）
+- **debug** (BOOLEAN, optional): デバッグログを有効化（デフォルト：False）
+
+#### 出力
+
+- **positive_prompt_per_image** (STRING list): 各画像のポジティブプロンプトリスト
+- **negative_prompt_per_image** (STRING list): 各画像のネガティブプロンプトリスト
+
+#### 機能
+
+- ✅ **バッチ処理対応**: 複数画像を一度に処理
+- ✅ **A1111形式サポート**: `parameters` メタデータから自動抽出
+- ✅ **入力の柔軟性**: リスト、改行区切り文字列など様々な形式に対応
+- ✅ **自動パース**: "Negative prompt:" ラベルを自動検出
+- ✅ **設定情報の除去**: Steps、Sampler等の設定行を自動削除
+- ✅ **エラーハンドリング**: 存在しないファイルやメタデータなしの画像は空文字列を返す
+
+#### 使用例
+
+```
+[String Input] → file_path
+    "/path/to/image1.png
+     /path/to/image2.png
+     /path/to/image3.png"
+         ↓
+[A1111 Prompt Splitter]
+         ↓ positive_prompt_per_image
+    ["positive1", "positive2", "positive3"]
+         ↓ negative_prompt_per_image
+    ["negative1", "negative2", "negative3"]
+```
+
+#### サポートされるメタデータ形式
+
+**A1111 parameters形式:**
+```
+1girl, masterpiece, best quality
+Negative prompt: bad hands, ugly
+Steps: 20, Sampler: DPM++ 2M, CFG scale: 7
+```
+
+---
+
+### 7. Embedding Wildcard Generator
+
+Embeddingファイルから自動的にYAMLワイルドカードファイルを生成します。
+
+#### 入力
+
+- **embedding_folder** (STRING): Embeddingファイルが含まれるフォルダのパス
+- **wildcard_name** (STRING): ワイルドカードの名前（ファイル名およびYAMLのトップレベルキーとして使用）
+- **output_folder** (STRING): 生成されたYAMLファイルの出力フォルダパス
+
+#### 出力
+
+- **status** (STRING): 生成の詳細を含むステータスメッセージ
+- **entry_count** (INT): 生成されたEmbeddingエントリの数
+
+#### 機能
+
+- ✅ サポート拡張子: `.pt`, `.safetensors`, `.bin`, `.ckpt`, `.pth`
+- ✅ `embedding:name` 構文を自動生成
+- ✅ ランダムEmbedding選択用の `all-<wildcard_name>` エントリを作成
+- ✅ ワイルドカード展開に適したYAMLフォーマットを出力
+- ✅ アルファベット順にソート
+
+#### 生成されるYAMLフォーマット
+
+```yaml
+my_embeddings:
+  all-my_embeddings:
+  - >-
+    {__BadDream__|__UnrealisticDream__|__easynegative__}
+  BadDream:
+  - >-
+    embedding:BadDream
+  UnrealisticDream:
+  - >-
+    embedding:UnrealisticDream
+  easynegative:
+  - >-
+    embedding:easynegative
+```
+
+#### 使用例
+
+1. Embeddingファイルをフォルダに配置（例：`/models/embeddings/`）
+2. ComfyUIで **Embedding Wildcard Generator** ノードを追加
+3. パラメータを設定：
+   - `embedding_folder`: `/models/embeddings/`
+   - `wildcard_name`: `my_embeddings`
+   - `output_folder`: `/wildcards/`
+4. ワークフローを実行
+5. 生成されるファイル：`/wildcards/my_embeddings.yaml`
+
+#### プロンプトでのワイルドカード使用
+
+- ランダムEmbedding：`__my_embeddings/all-my_embeddings__`
+- 特定のEmbedding：`__my_embeddings/BadDream__`
+
+---
+
+### 8. Embedding Path Resolver
+
+`embedding:name` を `embedding:subpath/name` に自動解決します。サブフォルダ構造を持つEmbeddingを簡単に使用できます。
+
+#### 入力
+
+- **text** (STRING, multiline): `embedding:name` パターンを含むテキスト
+
+#### 出力
+
+- **text** (STRING): パスが解決されたテキスト
+
+#### 機能
+
+- ✅ **再帰的スキャン**: `models/embeddings` フォルダを再帰的に検索
+- ✅ **自動パス解決**: `embedding:name` → `embedding:subpath/name` に変換
+- ✅ **拡張子除去**: 出力パスに拡張子を含めない
+- ✅ **キャッシング**: フォルダスキャン結果をキャッシュして高速化
+- ✅ **ComfyUI統合**: `folder_paths` モジュールを使用してEmbeddingフォルダを自動検出
+- ✅ **複数フォルダ対応**: `extra_model_paths.yaml` で設定された追加フォルダもスキャン
+
+#### 処理例
+
+**フォルダ構造:**
+```
+models/embeddings/
+  ├── BadDream.pt
+  └── illustrious/
+      └── NSFW/
+          └── masturbation/
+              └── FFF_imminent_masturbation.safetensors
+```
+
+**入力テキスト:**
+```
+1girl, embedding:FFF_imminent_masturbation, masterpiece
+```
+
+**出力テキスト:**
+```
+1girl, embedding:illustrious/NSFW/masturbation/FFF_imminent_masturbation, masterpiece
+```
+
+#### 使用例
+
+```
+[Text Input]
+    "1girl, embedding:BadDream, embedding:FFF_imminent_masturbation"
+         ↓
+[Embedding Path Resolver]
+         ↓
+    "1girl, embedding:BadDream, embedding:illustrious/NSFW/masturbation/FFF_imminent_masturbation"
+         ↓
+[CLIP Text Encode]
+```
+
+#### ユースケース
+
+- **複雑なフォルダ構造の簡略化**: サブフォルダのパスを入力する手間を省略
+- **ワイルドカードとの連携**: `__embeddings/all-embeddings__` から展開された名前を自動解決
+- **プロンプト共有**: 環境依存のパスを気にせず名前だけで共有可能
+
+---
+
+### 9. Text Split 3
+
+テキストを3つの出力に分割します。`<!...!>` と `<#...#>` デリミタを使用してテキストを抽出します。
+
+#### 入力
+
+- **text** (STRING, multiline): 分割するテキスト
+
+#### 出力
+
+- **text_1** (STRING): デリミタを除いた残りのテキスト
+- **text_2** (STRING): `<!...!>` で囲まれたテキスト（複数ある場合は結合、末尾にカンマ追加）
+- **text_3** (STRING): `<#...#>` で囲まれたテキスト（複数ある場合は結合、末尾にカンマ追加）
+
+#### 機能
+
+- ✅ **複数マーカー対応**: 同じデリミタの複数箇所を自動抽出
+- ✅ **自動結合**: 抽出されたテキストをスペース区切りで結合
+- ✅ **カンマ追加**: text_2とtext_3が空でない場合、末尾にカンマを追加
+- ✅ **クリーンアップ**: 元テキストから抽出部分を削除し、空白を整理
+
+#### 処理例
+
+**入力:**
+```
+positive prompt <!negative1!> more text <!negative2!> <#extra info#>
+```
+
+**出力:**
+- **text_1**: `"positive prompt more text"`
+- **text_2**: `"negative1 negative2,"`
+- **text_3**: `"extra info,"`
+
+#### 使用例
+
+```
+[Text Input]
+    "1girl, masterpiece <!bad hands, ugly!> <#lora:style:0.8#>"
+         ↓
+[Text Split 3]
+    ├─ text_1: "1girl, masterpiece"
+    ├─ text_2: "bad hands, ugly,"
+    └─ text_3: "lora:style:0.8,"
+         ↓
+[CLIP Text Encode (Positive)] ← text_1
+[CLIP Text Encode (Negative)] ← text_2
+[Extra Processing] ← text_3
+```
+
+#### ユースケース
+
+- **プロンプト分離**: 1つのテキストからポジティブ・ネガティブ・その他を分離
+- **ワークフロー簡略化**: 複数のテキスト入力ノードを1つにまとめる
+- **条件分岐**: 特定のマーカーで囲んだテキストを別処理に回す
+
+---
+
+### 10. Repeat Text Lines
+
+テキストを指定回数繰り返します。シンプルなテキスト繰り返しノードです。
+
+#### 入力
+
+- **text** (STRING, multiline): 繰り返すテキスト
+- **count** (INT): 繰り返し回数（範囲：1-999、デフォルト：5）
+
+#### 出力
+
+- **text** (STRING): 改行区切りで繰り返されたテキスト
+
+#### 機能
+
+- ✅ **シンプル**: テキストを指定回数改行区切りで繰り返す
+- ✅ **エラーハンドリング**: 無効な入力に対してエラーメッセージを返す
+
+#### 処理例
+
+**入力:**
+- text: `"1girl, masterpiece"`
+- count: `3`
+
+**出力:**
+```
+1girl, masterpiece
+1girl, masterpiece
+1girl, masterpiece
+```
+
+#### 使用例
+
+```
+[Text Input] → "lora:style:0.7"
+[Repeat Text Lines] (count=5)
+         ↓
+    "lora:style:0.7
+     lora:style:0.7
+     lora:style:0.7
+     lora:style:0.7
+     lora:style:0.7"
+```
+
+---
+
 ## プロジェクト構造
 
 ```
@@ -427,8 +714,13 @@ comfyui-samenodes/
 ├── float_to_string.py               # Float to Stringノードの実装
 ├── batch_processor.py               # Batch Image Processorノードの実装
 ├── lora_wildcard_generator.py       # LoRA Wildcard Generatorノードの実装
+├── embedding_wildcard_generator.py  # Embedding Wildcard Generatorノードの実装
+├── embedding_path_resolver.py       # Embedding Path Resolverノードの実装
 ├── civitai_bulk_downloader.py       # Civitai Bulk Downloaderノードの実装
 ├── extract_prompt_from_image.py     # Extract Prompt from Imageノードの実装
+├── prompt_extractor_posneg.py       # A1111 Prompt Splitterノードの実装
+├── text_split_3.py                  # Text Split 3ノードの実装
+├── repeat_text_lines.py             # Repeat Text Linesノードの実装
 ├── .env.example                     # Civitai API用の環境変数テンプレート
 ├── .env                             # 実際の環境変数（gitには含まれません）
 ├── .gitignore                       # Git ignoreルール（.envを除外）
