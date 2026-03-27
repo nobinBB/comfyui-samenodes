@@ -24,7 +24,10 @@ ComfyUIのワークフローを強化する、文字列変換、バッチ処理�
 - **Embedding Wildcard Generator**: Embeddingファイルから自動的にYAMLワイルドカードを生成
 - **Embedding Path Resolver**: `embedding:name` を `embedding:path/name` に自動解決
 
-これらのノードは、特にLoRAモデル、Embedding、ワイルドカード、プロンプト、バッチ操作を扱う際に、ComfyUIのワークフローを効率化するよう設計されています。
+### ユーティリティ
+- **Get ComfyUI Input Path**: ComfyUIの入力ディレクトリパスを取得
+
+これらのノードは、特にLoRAモデル、Embedding、ワイルドカード、プロンプト、バッチ操作、パス管理を扱う際に、ComfyUIのワークフローを効率化するよう設計されています。
 
 ---
 
@@ -706,6 +709,59 @@ positive prompt <!negative1!> more text <!negative2!> <#extra info#>
 
 ---
 
+### 11. Get ComfyUI Input Path
+
+ComfyUIの入力ディレクトリパスを取得します。画像やファイルの入力パスを動的に取得する際に便利です。
+
+#### 入力
+
+- なし（入力パラメータ不要）
+
+#### 出力
+
+- **input_path** (STRING): ComfyUIの入力ディレクトリの絶対パス
+
+#### 機能
+
+- ✅ **自動パス取得**: ComfyUIの`folder_paths`モジュールから入力ディレクトリを自動取得
+- ✅ **設定不要**: パラメータ入力なしで即座に使用可能
+- ✅ **クロスプラットフォーム**: Windows/Linux/Mac環境で動作
+
+#### 使用例
+
+```
+[Get ComfyUI Input Path]
+         ↓ input_path
+    "/path/to/ComfyUI/input"
+         ↓
+[String Concatenate] + "/myimage.png"
+         ↓
+    "/path/to/ComfyUI/input/myimage.png"
+         ↓
+[Load Image] or [Other Nodes]
+```
+
+#### ユースケース
+
+- **動的パス生成**: 環境に依存しない動的なファイルパス構築
+- **ファイル操作**: 入力ディレクトリ内のファイルを自動検索・処理
+- **ポータブルワークフロー**: 異なる環境でも動作するワークフロー作成
+- **バッチ処理**: 入力フォルダ内の複数ファイルを処理
+
+#### 出力例
+
+**Windows:**
+```
+C:\ComfyUI\input
+```
+
+**Linux/Mac:**
+```
+/home/user/ComfyUI/input
+```
+
+---
+
 ## プロジェクト構造
 
 ```
@@ -721,6 +777,7 @@ comfyui-samenodes/
 ├── prompt_extractor_posneg.py       # A1111 Prompt Splitterノードの実装
 ├── text_split_3.py                  # Text Split 3ノードの実装
 ├── repeat_text_lines.py             # Repeat Text Linesノードの実装
+├── input_path_node.py               # Get ComfyUI Input Pathノードの実装
 ├── .env.example                     # Civitai API用の環境変数テンプレート
 ├── .env                             # 実際の環境変数（gitには含まれません）
 ├── .gitignore                       # Git ignoreルール（.envを除外）
