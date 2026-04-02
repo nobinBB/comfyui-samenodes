@@ -29,7 +29,7 @@ except ImportError:
     print("[LoraTagPowerLoaderExtended] safetensors not available - trigger word extraction disabled")
 
 
-class LoraTagPowerLoaderExtended:
+class LoRATagPowerLoaderExtended:
     """
     Extended LoRA Tag Power Loader with second_text support.
     All original functionality preserved - only adds second_text input/output.
@@ -425,9 +425,9 @@ class LoraTagPowerLoaderExtended:
 
 # ComfyUI Node Registration
 NODE_CLASS_MAPPINGS = {
-    "LoraTagPowerLoaderExtended": LoraTagPowerLoaderExtended,
+    "LoRATagPowerLoaderExtended": LoRATagPowerLoaderExtended,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "LoraTagPowerLoaderExtended": "LoRA Tag Power Loader Extended",
+    "LoRATagPowerLoaderExtended": "LoRA Tag Power Loader Extended",
 }
