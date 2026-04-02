@@ -1,6 +1,6 @@
 """
 ComfyUI Same Nodes - Custom Nodes Package
-Float to String conversion utilities, Batch Image Processor, LoRA Wildcard Generator, Embedding Wildcard Generator, Embedding Path Resolver, Civitai Bulk Downloader, Extract Prompt from Image, Prompt Extractor PosNeg, and Text Split 3
+Float to String conversion utilities, Batch Image Processor, LoRA Wildcard Generator, Embedding Wildcard Generator, Embedding Path Resolver, Civitai Bulk Downloader, Extract Prompt from Image, Prompt Extractor PosNeg, Text Split 3, and LoRA Text Dual Input
 """
 from .float_to_string import NODE_CLASS_MAPPINGS as FLOAT_MAPPINGS
 from .float_to_string import NODE_DISPLAY_NAME_MAPPINGS as FLOAT_DISPLAY_MAPPINGS
@@ -35,6 +35,9 @@ from .embedding_path_resolver import NODE_DISPLAY_NAME_MAPPINGS as RESOLVER_DISP
 from .input_path_node import NODE_CLASS_MAPPINGS as INPUT_PATH_MAPPINGS
 from .input_path_node import NODE_DISPLAY_NAME_MAPPINGS as INPUT_PATH_DISPLAY_MAPPINGS
 
+from .lora_text_dual_input import NODE_CLASS_MAPPINGS as LORA_DUAL_MAPPINGS
+from .lora_text_dual_input import NODE_DISPLAY_NAME_MAPPINGS as LORA_DUAL_DISPLAY_MAPPINGS
+
 NODE_CLASS_MAPPINGS = {
     **FLOAT_MAPPINGS,
     **BATCH_MAPPINGS,
@@ -47,6 +50,7 @@ NODE_CLASS_MAPPINGS = {
     **POSNEG_MAPPINGS,
     **TEXT_SPLIT_MAPPINGS,
     **INPUT_PATH_MAPPINGS,
+    **LORA_DUAL_MAPPINGS,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -61,6 +65,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     **POSNEG_DISPLAY_MAPPINGS,
     **TEXT_SPLIT_DISPLAY_MAPPINGS,
     **INPUT_PATH_DISPLAY_MAPPINGS,
+    **LORA_DUAL_DISPLAY_MAPPINGS,
 }
 
 __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS"]
