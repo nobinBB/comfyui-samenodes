@@ -46,6 +46,7 @@ class LoraToCivitaiUrl:
     OUTPUT_NODE = True
 
     def __init__(self):
+        # Load API key from .env file
         env_path = Path(__file__).parent / '.env'
         load_dotenv(env_path)
         self.api_key = os.getenv('CIVITAI_API_KEY', '')
@@ -65,6 +66,7 @@ class LoraToCivitaiUrl:
     def get_sha256_from_json(self, lora_name, json_folder):
         """
         Get SHA256 from JSON metadata file.
+        Searches recursively in subfolders.
 
         Args:
             lora_name: Name of the LoRA
@@ -75,45 +77,33 @@ class LoraToCivitaiUrl:
         """
         folder = Path(json_folder)
         if not folder.exists() or not folder.is_dir():
+            print(f"  ✗ JSON folder not found: {json_folder}")
             return None
 
-        # Try to find JSON file matching LoRA name
-        json_files = [
-            folder / f"{lora_name}.json",
-            folder / f"{lora_name}.safetensors.json",
-            folder / f"{lora_name}.metadata.json",
-        ]
-
-        # Also search all JSON files if exact match not found
-        for json_file in json_files:
-            if json_file.exists():
-                try:
-                    with open(json_file, 'r', encoding='utf-8') as f:
-                        data = json.load(f)
-                    sha256 = data.get('sha256', '')
-                    if sha256:
-                        return sha256
-                except Exception as e:
-                    print(f"  Error reading {json_file.name}: {e}")
-
-        # Search all JSON files for matching file_name
-        for json_file in folder.glob('*.json'):
+        # Search all JSON files recursively for matching file_name
+        print(f"  Searching JSON files in: {json_folder}")
+        for json_file in folder.rglob('*.json'):
             try:
                 with open(json_file, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                 file_name = data.get('file_name', '')
+
+                # Match by file_name
                 if file_name == lora_name:
                     sha256 = data.get('sha256', '')
                     if sha256:
+                        print(f"  ✓ Matched: {json_file.name} → SHA256: {sha256[:16]}...")
                         return sha256
-            except Exception:
+            except Exception as e:
                 continue
 
+        print(f"  ✗ No matching JSON found for: {lora_name}")
         return None
 
     def calculate_sha256_from_file(self, lora_name, lora_folder):
         """
         Calculate SHA256 hash directly from LoRA file.
+        Searches recursively in subfolders.
 
         Args:
             lora_name: Name of the LoRA
@@ -124,35 +114,41 @@ class LoraToCivitaiUrl:
         """
         folder = Path(lora_folder)
         if not folder.exists() or not folder.is_dir():
+            print(f"  ✗ LoRA folder not found: {lora_folder}")
             return None
 
-        # Try common LoRA file extensions
-        lora_files = [
-            folder / f"{lora_name}.safetensors",
-            folder / f"{lora_name}.pt",
-            folder / f"{lora_name}.ckpt",
-        ]
+        # Search recursively for LoRA file
+        print(f"  Searching LoRA files in: {lora_folder}")
+        extensions = ['*.safetensors', '*.pt', '*.ckpt']
 
-        for lora_file in lora_files:
-            if lora_file.exists():
-                try:
-                    print(f"  Calculating SHA256 for {lora_file.name}...")
-                    sha256_hash = hashlib.sha256()
-                    with open(lora_file, 'rb') as f:
-                        for chunk in iter(lambda: f.read(8192), b''):
-                            sha256_hash.update(chunk)
-                    return sha256_hash.hexdigest()
-                except Exception as e:
-                    print(f"  Error calculating SHA256: {e}")
+        for ext in extensions:
+            for lora_file in folder.rglob(ext):
+                # Match by filename (without extension)
+                if lora_file.stem == lora_name:
+                    try:
+                        print(f"  Calculating SHA256 for {lora_file.name}...")
+                        sha256_hash = hashlib.sha256()
+                        with open(lora_file, 'rb') as f:
+                            for chunk in iter(lambda: f.read(8192), b''):
+                                sha256_hash.update(chunk)
+                        sha256 = sha256_hash.hexdigest()
+                        print(f"  ✓ Calculated SHA256: {sha256[:16]}...")
+                        return sha256
+                    except Exception as e:
+                        print(f"  ✗ Error calculating SHA256: {e}")
 
+        print(f"  ✗ No LoRA file found for: {lora_name}")
         return None
 
     def search_civitai_by_hash(self, sha256):
         """
         Search Civitai API by SHA256 hash.
 
+        Args:
+            sha256: SHA256 hash of the LoRA file
+
         Returns:
-            dict with civitai_url or None
+            Civitai URL string or None
         """
         url = f"https://civitai.com/api/v1/model-versions/by-hash/{sha256}"
         headers = {}
@@ -188,7 +184,12 @@ class LoraToCivitaiUrl:
         try:
             print(f"\n{'='*60}")
             print(f"LoRA to Civitai URL")
-            print(f"{'='*60}\n")
+            print(f"{'='*60}")
+            if self.api_key:
+                print(f"API Key: configured (.env)")
+            else:
+                print(f"API Key: not configured (rate limited)")
+            print()
 
             # Parse LoRA syntax
             lora_names = self.parse_lora_syntax(lora_syntax)
