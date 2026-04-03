@@ -1,6 +1,6 @@
 """
 ComfyUI Same Nodes - Custom Nodes Package
-Float to String conversion utilities, Batch Image Processor, LoRA Wildcard Generator, Embedding Wildcard Generator, Embedding Path Resolver, Civitai Bulk Downloader, Extract Prompt from Image, Prompt Extractor PosNeg, Text Split 3, and LoRA Text Dual Input
+Float to String conversion utilities, Batch Image Processor, LoRA Wildcard Generator, Embedding Wildcard Generator, Embedding Path Resolver, Extract Prompt from Image, Prompt Extractor PosNeg, Text Split 3, and LoRA Text Dual Input
 """
 from .float_to_string import NODE_CLASS_MAPPINGS as FLOAT_MAPPINGS
 from .float_to_string import NODE_DISPLAY_NAME_MAPPINGS as FLOAT_DISPLAY_MAPPINGS
@@ -13,9 +13,6 @@ from .lora_wildcard_generator import NODE_DISPLAY_NAME_MAPPINGS as LORA_DISPLAY_
 
 from .embedding_wildcard_generator import NODE_CLASS_MAPPINGS as EMBEDDING_MAPPINGS
 from .embedding_wildcard_generator import NODE_DISPLAY_NAME_MAPPINGS as EMBEDDING_DISPLAY_MAPPINGS
-
-from .civitai_bulk_downloader import NODE_CLASS_MAPPINGS as CIVITAI_MAPPINGS
-from .civitai_bulk_downloader import NODE_DISPLAY_NAME_MAPPINGS as CIVITAI_DISPLAY_MAPPINGS
 
 from .extract_prompt_from_image import NODE_CLASS_MAPPINGS as EXTRACT_MAPPINGS
 from .extract_prompt_from_image import NODE_DISPLAY_NAME_MAPPINGS as EXTRACT_DISPLAY_MAPPINGS
@@ -53,7 +50,6 @@ NODE_CLASS_MAPPINGS = {
     **LORA_MAPPINGS,
     **EMBEDDING_MAPPINGS,
     **RESOLVER_MAPPINGS,
-    **CIVITAI_MAPPINGS,
     **EXTRACT_MAPPINGS,
     **REPEAT_MAPPINGS,
     **POSNEG_MAPPINGS,
@@ -71,7 +67,6 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     **LORA_DISPLAY_MAPPINGS,
     **EMBEDDING_DISPLAY_MAPPINGS,
     **RESOLVER_DISPLAY_MAPPINGS,
-    **CIVITAI_DISPLAY_MAPPINGS,
     **EXTRACT_DISPLAY_MAPPINGS,
     **REPEAT_DISPLAY_MAPPINGS,
     **POSNEG_DISPLAY_MAPPINGS,
