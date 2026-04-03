@@ -36,6 +36,10 @@ class LoraToCivitaiUrl:
                     "default": "",
                     "multiline": False
                 }),
+                "api_key": ("STRING", {
+                    "default": "",
+                    "multiline": False
+                }),
             }
         }
 
@@ -44,11 +48,6 @@ class LoraToCivitaiUrl:
     FUNCTION = "get_civitai_url"
     CATEGORY = "utils/civitai"
     OUTPUT_NODE = True
-
-    def __init__(self):
-        env_path = Path(__file__).parent / '.env'
-        load_dotenv(env_path)
-        self.api_key = os.getenv('CIVITAI_API_KEY', '')
 
     def parse_lora_syntax(self, lora_syntax):
         """
@@ -139,17 +138,21 @@ class LoraToCivitaiUrl:
         print(f"  ✗ No LoRA file found for: {lora_name}")
         return None
 
-    def search_civitai_by_hash(self, sha256):
+    def search_civitai_by_hash(self, sha256, api_key=""):
         """
         Search Civitai API by SHA256 hash.
+
+        Args:
+            sha256: SHA256 hash of the LoRA file
+            api_key: Civitai API key (optional)
 
         Returns:
             dict with civitai_url or None
         """
         url = f"https://civitai.com/api/v1/model-versions/by-hash/{sha256}"
         headers = {}
-        if self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
 
         try:
             response = requests.get(url, headers=headers, timeout=10)
@@ -165,7 +168,7 @@ class LoraToCivitaiUrl:
             print(f"  Error searching Civitai: {e}")
             return None
 
-    def get_civitai_url(self, lora_syntax, json_folder, lora_folder=""):
+    def get_civitai_url(self, lora_syntax, json_folder, lora_folder="", api_key=""):
         """
         Parse LoRA syntax and return Civitai URLs.
 
@@ -173,14 +176,26 @@ class LoraToCivitaiUrl:
             lora_syntax: LoRA syntax string (e.g., "<lora:name:0.8>")
             json_folder: Folder containing JSON metadata
             lora_folder: (Optional) Folder containing LoRA files for SHA256 calculation
+            api_key: (Optional) Civitai API key
 
         Returns:
             Tuple of (civitai_url, archive_url)
         """
         try:
+            # Use provided API key or fallback to .env
+            if not api_key:
+                env_path = Path(__file__).parent / '.env'
+                load_dotenv(env_path)
+                api_key = os.getenv('CIVITAI_API_KEY', '')
+
             print(f"\n{'='*60}")
             print(f"LoRA to Civitai URL")
-            print(f"{'='*60}\n")
+            print(f"{'='*60}")
+            if api_key:
+                print(f"API Key: configured (length: {len(api_key)})")
+            else:
+                print(f"API Key: not configured (rate limited)")
+            print()
 
             # Parse LoRA syntax
             lora_names = self.parse_lora_syntax(lora_syntax)
@@ -215,7 +230,7 @@ class LoraToCivitaiUrl:
                     continue
 
                 # Search Civitai
-                civitai_url = self.search_civitai_by_hash(sha256)
+                civitai_url = self.search_civitai_by_hash(sha256, api_key)
 
                 if civitai_url:
                     print(f"  ✓ Found: {civitai_url}")
