@@ -13,12 +13,15 @@ ComfyUIのワークフローを強化する、文字列変換、バッチ処理�
 
 ### 画像・プロンプト処理
 - **Batch Image Processor**: 効率的なバッチ画像処理
+- **Batch Image Compressor**: 画像一括圧縮（PNG: 60-80%削減、JPEG最適化）
+- **Images to PDF**: 複数画像を1つのPDFに変換
 - **Extract Prompt from Image**: 画像メタデータからプロンプトを抽出（ComfyUI形式）
 - **A1111 Prompt Splitter**: A1111/SD WebUI画像からポジティブ・ネガティブプロンプトを抽出
 
 ### LoRA管理
 - **LoRA Wildcard Generator**: Civitaiメタデータから自動的にYAMLワイルドカードを生成
-- **Civitai Bulk Downloader**: CivitaiからLoRAモデルをAPI認証付きでバッチダウンロード
+- **Civitai LoRA Searcher**: SHA256でCivitai APIを検索（JSONフォルダ一括処理）
+- **LoRA to Civitai URL**: LoRA構文からCivitai URLを取得
 
 ### Embedding管理
 - **Embedding Wildcard Generator**: Embeddingファイルから自動的にYAMLワイルドカードを生成
@@ -27,7 +30,7 @@ ComfyUIのワークフローを強化する、文字列変換、バッチ処理�
 ### ユーティリティ
 - **Get ComfyUI Input Path**: ComfyUIの入力ディレクトリパスを取得
 
-これらのノードは、特にLoRAモデル、Embedding、ワイルドカード、プロンプト、バッチ操作、パス管理を扱う際に、ComfyUIのワークフローを効率化するよう設計されています。
+これらのノードは、特にLoRAモデル、Embedding、ワイルドカード、プロンプト、バッチ操作、画像処理、パス管理を扱う際に、ComfyUIのワークフローを効率化するよう設計されています。
 
 ---
 
@@ -65,6 +68,36 @@ Civitai Bulk Downloaderノードを使用する場合：
 ### ステップ4: ComfyUIを再起動
 
 ComfyUIを再起動して新しいノードを読み込みます。
+
+---
+
+## ノード一覧
+
+### テキスト処理
+- **Float to String** - 浮動小数点を文字列に変換（小数点以下桁数制御）
+- **Text Split 3** - テキストを3つの出力に分割
+- **Repeat Text Lines** - テキストを指定回数繰り返す
+- **A1111 Prompt Splitter** - A1111形式の画像からプロンプトを抽出
+
+### 画像処理
+- **Batch Image Processor** - バッチ画像処理
+- **Batch Image Compressor** - 画像一括圧縮（PNG: 60-80%削減、JPEG最適化）
+- **Images to PDF** - 複数画像を1つのPDFに変換
+- **Extract Prompt from Image** - ComfyUI形式画像からプロンプトを抽出
+
+### LoRA管理
+- **LoRA Wildcard Generator** - CivitaiメタデータからYAMLワイルドカード生成
+- **LoRA Text Dual Input** - LoRAテキストの二重入力
+- **LoRA Tag Power Loader Extended** - 拡張LoRAタグパワーローダー
+- **Civitai LoRA Searcher** - SHA256でCivitai検索（JSONフォルダ一括）
+- **LoRA to Civitai URL** - LoRA構文からCivitai URL取得
+
+### Embedding管理
+- **Embedding Wildcard Generator** - EmbeddingファイルからYAMLワイルドカード生成
+- **Embedding Path Resolver** - `embedding:name` を `embedding:path/name` に自動解決
+
+### ユーティリティ
+- **Get ComfyUI Input Path** - ComfyUIの入力ディレクトリパスを取得
 
 ---
 
@@ -762,6 +795,182 @@ C:\ComfyUI\input
 
 ---
 
+### 11. Batch Image Compressor
+
+フォルダ内の画像を一括圧縮します。PNG/JPEG形式のまま、ファイルサイズを大幅に削減します。
+
+#### 入力
+
+- **input_folder** (STRING): 入力フォルダ（サブフォルダ含む）
+- **output_folder** (STRING): 出力フォルダ
+- **png_mode** (選択): PNG圧縮モード
+  - **Lossless**: ロスレス圧縮（20-40%削減）
+  - **Quantize (60-80% reduction)**: 量子化（60-80%削減、256色）
+- **jpeg_quality** (INT): JPEG品質（1-100、デフォルト: 85）
+
+#### 出力
+
+- **status** (STRING): 各ファイルの圧縮結果
+- **summary** (STRING): 全体統計（削減率、処理数）
+
+#### 機能
+
+- ✅ **PNG Quantize**: 60-80% 削減（256色に減色）
+- ✅ **PNG Lossless**: 20-40% 削減（最適化のみ）
+- ✅ **JPEG最適化**: 品質調整可能
+- ✅ **サブフォルダ対応**: フォルダ構造を保持
+- ✅ **詳細統計**: 各ファイルと全体の削減率を表示
+
+#### 使用例
+
+```
+入力フォルダ: C:/images/
+出力フォルダ: C:/images_compressed/
+PNG mode: Quantize (60-80% reduction)
+JPEG quality: 85
+
+結果:
+[1/100] image1.png: 5.23 MB → 1.15 MB (78.0% reduced)
+[2/100] image2.jpg: 2.45 MB → 1.89 MB (22.9% reduced)
+...
+Total reduction: 65.3%
+```
+
+---
+
+### 12. Images to PDF
+
+複数の画像を1つのPDFファイルに変換します。
+
+#### 入力
+
+- **input_folder** (STRING): 入力フォルダ
+- **output_folder** (STRING): 出力フォルダ
+- **include_subfolders** (BOOLEAN): サブフォルダも含める
+- **sort_by_filename** (BOOLEAN): ファイル名順にソート（デフォルト: True）
+- **quality** (選択): 画質設定
+  - **高画質(大きい)**: 高品質（quality: 95）
+  - **標準**: 標準品質（quality: 85）
+  - **低画質(小さい)**: 低品質（quality: 75）
+
+#### 出力
+
+- **status** (STRING): 処理結果（ページ数、ファイルサイズ）
+- **pdf_path** (STRING): 生成されたPDFのフルパス
+
+#### 機能
+
+- ✅ **複数画像を1つのPDFに結合**
+- ✅ **サブフォルダ対応**（オプション）
+- ✅ **ファイル名順に自動ソート**
+- ✅ **画質設定**（高/標準/低）
+- ✅ **タイムスタンプ付きファイル名**（`images_20250409_123456.pdf`）
+- ✅ **PNG, JPEG, BMP, TIFF, WebP 対応**
+- ✅ **RGBA → RGB 自動変換**
+
+#### 使用例
+
+```
+入力フォルダ: C:/manga/chapter1/
+出力フォルダ: C:/output/
+Include subfolders: False
+Sort by filename: True
+Quality: 高画質(大きい)
+
+結果:
+✓ PDF created successfully
+Pages: 25
+File size: 12.45 MB
+Output: images_20250409_143022.pdf
+```
+
+---
+
+### 13. Civitai LoRA Searcher
+
+JSONメタデータフォルダからSHA256を読み込み、Civitai APIでLoRAモデルを一括検索します。
+
+#### 入力
+
+- **json_folder** (STRING): JSONメタデータフォルダのパス
+
+#### 出力
+
+- **civitai_urls** (STRING): Civitai.comで見つかったURL一覧（改行区切り）
+- **archive_urls** (STRING): Archive フォールバックURL一覧（改行区切り）
+- **info** (STRING): 詳細なモデル情報（JSON形式）
+- **status** (STRING): 各LoRAの検索結果サマリー
+
+#### 機能
+
+- ✅ **JSONフォルダ一括処理**: サブフォルダを再帰的に検索
+- ✅ **Civitai API検索**: SHA256ハッシュでモデルを検索
+- ✅ **Archive フォールバック**: 見つからない場合はCivitAI Archive URL
+- ✅ **詳細ログ**: 各LoRAの検索結果を表示
+- ✅ **API認証**: `.env` ファイルからAPIキー読み込み（オプション）
+
+#### 使用例
+
+```
+JSON folder: C:/lora_metadata/
+
+結果:
+[1/36] anal_licking
+  ✓ Found: https://civitai.com/models/1179259?modelVersionId=1327045
+[2/36] bondage_blowjob
+  △ Not found on Civitai → Archive: https://civarchive.com/sha256/abc123...
+
+Found on Civitai: 24
+Archive Fallback: 12
+```
+
+---
+
+### 14. LoRA to Civitai URL
+
+LoRA構文（`<lora:name:weight>`）を解析し、Civitai URLを取得します。
+
+#### 入力
+
+- **lora_syntax** (STRING): LoRA構文（例：`<lora:anal_licking:0.8>`）
+- **json_folder** (STRING): JSONメタデータフォルダ
+- **lora_folder** (STRING, optional): LoRAファイルフォルダ（SHA256計算用）
+
+#### 出力
+
+- **civitai_url** (STRING): Civitai.comで見つかったURL（改行区切り）
+- **archive_url** (STRING): Archive フォールバックURL または エラーメッセージ
+
+#### 機能
+
+- ✅ **LoRA構文解析**: `<lora:name:weight>` から名前を抽出
+- ✅ **SHA256取得**: JSONまたはLoRAファイルから取得
+- ✅ **サブフォルダ探索**: JSONとLoRAフォルダを再帰的に検索
+- ✅ **Civitai API検索**: SHA256でモデルを検索
+- ✅ **Archive フォールバック**: 見つからない場合はArchive URL
+- ✅ **API認証**: `.env` ファイルからAPIキー読み込み
+
+#### 使用例
+
+```
+LoRA syntax:
+<lora:anal_licking:0.8>
+<lora:bondage_blowjob:0.7>
+
+JSON folder: C:/lora_metadata/
+
+結果:
+Processing: anal_licking
+  ✓ Matched: anal_licking.json → SHA256: 9eb9c1a7...
+  ✓ Found: https://civitai.com/models/1179259?modelVersionId=1327045
+
+Processing: bondage_blowjob
+  ✓ Matched: bondage_blowjob.json → SHA256: abc123...
+  △ Archive Fallback: https://civarchive.com/sha256/abc123...
+```
+
+---
+
 ## プロジェクト構造
 
 ```
@@ -769,15 +978,20 @@ comfyui-samenodes/
 ├── __init__.py                      # ノードの初期化と登録
 ├── float_to_string.py               # Float to Stringノードの実装
 ├── batch_processor.py               # Batch Image Processorノードの実装
+├── batch_image_compressor.py        # Batch Image Compressorノードの実装
+├── images_to_pdf.py                 # Images to PDFノードの実装
 ├── lora_wildcard_generator.py       # LoRA Wildcard Generatorノードの実装
+├── lora_to_civitai_url.py           # LoRA to Civitai URLノードの実装
+├── civitai_lora_searcher.py         # Civitai LoRA Searcherノードの実装
 ├── embedding_wildcard_generator.py  # Embedding Wildcard Generatorノードの実装
 ├── embedding_path_resolver.py       # Embedding Path Resolverノードの実装
-├── civitai_bulk_downloader.py       # Civitai Bulk Downloaderノードの実装
 ├── extract_prompt_from_image.py     # Extract Prompt from Imageノードの実装
 ├── prompt_extractor_posneg.py       # A1111 Prompt Splitterノードの実装
 ├── text_split_3.py                  # Text Split 3ノードの実装
 ├── repeat_text_lines.py             # Repeat Text Linesノードの実装
 ├── input_path_node.py               # Get ComfyUI Input Pathノードの実装
+├── lora_text_dual_input.py          # LoRA Text Dual Inputノードの実装
+├── lora_tag_power_loader_extended.py # LoRA Tag Power Loader Extendedノードの実装
 ├── .env.example                     # Civitai API用の環境変数テンプレート
 ├── .env                             # 実際の環境変数（gitには含まれません）
 ├── .gitignore                       # Git ignoreルール（.envを除外）
