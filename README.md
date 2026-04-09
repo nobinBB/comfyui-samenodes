@@ -14,6 +14,7 @@ ComfyUIのワークフローを強化する、文字列変換、バッチ処理�
 ### 画像・プロンプト処理
 - **Batch Image Processor**: 効率的なバッチ画像処理
 - **Batch Image Compressor**: 画像一括圧縮（PNG: 60-80%削減、JPEG最適化）
+- **Image Format Converter**: 画像フォーマット一括変換（PNG/JPEG/WebP/BMP/TIFF）
 - **Images to PDF**: 複数画像を1つのPDFに変換
 - **Extract Prompt from Image**: 画像メタデータからプロンプトを抽出（ComfyUI形式）
 - **A1111 Prompt Splitter**: A1111/SD WebUI画像からポジティブ・ネガティブプロンプトを抽出
@@ -82,6 +83,7 @@ ComfyUIを再起動して新しいノードを読み込みます。
 ### 画像処理
 - **Batch Image Processor** - バッチ画像処理
 - **Batch Image Compressor** - 画像一括圧縮（PNG: 60-80%削減、JPEG最適化）
+- **Image Format Converter** - 画像フォーマット一括変換（PNG/JPEG/WebP/BMP/TIFF）
 - **Images to PDF** - 複数画像を1つのPDFに変換
 - **Extract Prompt from Image** - ComfyUI形式画像からプロンプトを抽出
 
@@ -971,6 +973,65 @@ Processing: bondage_blowjob
 
 ---
 
+### 15. Image Format Converter
+
+画像ファイルの拡張子を別の拡張子に一括変換します。同じ拡張子への変換はエラーになります。
+
+#### 入力
+
+- **input_folder** (STRING): 入力フォルダ
+- **output_folder** (STRING): 出力フォルダ
+- **source_extension** (選択): 元の拡張子
+  - `.png`, `.jpg`, `.jpeg`, `.bmp`, `.webp`, `.tiff`
+- **target_extension** (選択): 変換先の拡張子
+  - `.png`, `.jpg`, `.jpeg`, `.bmp`, `.webp`, `.tiff`
+- **quality** (INT, optional): JPEG/WebP品質（1-100、デフォルト: 85）
+- **include_subfolders** (BOOLEAN, optional): サブフォルダも含める
+
+#### 出力
+
+- **status** (STRING): 各ファイルの変換結果
+- **file_count** (INT): 変換したファイル数
+
+#### 機能
+
+- ✅ **同じ拡張子チェック**: 元と変換先が同じ場合はエラー
+- ✅ **サブフォルダ対応**: フォルダ構造を保持
+- ✅ **品質設定**: JPEG/WebP品質調整可能
+- ✅ **自動RGB変換**: RGBA → RGB（JPEG/BMP用）
+- ✅ **最適化**: PNG圧縮、JPEG最適化
+
+#### エラー例
+
+```
+source_extension: .png
+target_extension: .png
+
+結果:
+✗ Error: Source and target extensions are the same (.png). 
+   Cannot convert to the same format.
+```
+
+#### 使用例
+
+```
+入力フォルダ: C:/images/
+出力フォルダ: C:/images_converted/
+source_extension: .png
+target_extension: .jpg
+quality: 85
+include_subfolders: False
+
+結果:
+[1/50] image1.png → image1.jpg (+15.2%)
+[2/50] image2.png → image2.jpg (-22.3%)
+[3/50] image3.png → image3.jpg (-18.7%)
+...
+Converted: 50/50 files (.png → .jpg)
+```
+
+---
+
 ## プロジェクト構造
 
 ```
@@ -979,6 +1040,7 @@ comfyui-samenodes/
 ├── float_to_string.py               # Float to Stringノードの実装
 ├── batch_processor.py               # Batch Image Processorノードの実装
 ├── batch_image_compressor.py        # Batch Image Compressorノードの実装
+├── image_format_converter.py        # Image Format Converterノードの実装
 ├── images_to_pdf.py                 # Images to PDFノードの実装
 ├── lora_wildcard_generator.py       # LoRA Wildcard Generatorノードの実装
 ├── lora_to_civitai_url.py           # LoRA to Civitai URLノードの実装
