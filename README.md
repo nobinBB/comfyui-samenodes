@@ -14,6 +14,7 @@ ComfyUIのワークフローを強化する、文字列変換、バッチ処理�
 ### 画像・プロンプト処理
 - **Batch Image Processor**: 効率的なバッチ画像処理
 - **Batch Image Compressor**: 画像一括圧縮（PNG: 60-80%削減、JPEG最適化）
+- **Image Format Converter**: 画像フォーマット一括変換（PNG/JPEG/WebP/BMP/TIFF）
 - **Images to PDF**: 複数画像を1つのPDFに変換
 - **Extract Prompt from Image**: 画像メタデータからプロンプトを抽出（ComfyUI形式）
 - **A1111 Prompt Splitter**: A1111/SD WebUI画像からポジティブ・ネガティブプロンプトを抽出
@@ -29,8 +30,9 @@ ComfyUIのワークフローを強化する、文字列変換、バッチ処理�
 
 ### ユーティリティ
 - **Get ComfyUI Input Path**: ComfyUIの入力ディレクトリパスを取得
+- **Seed Step N**: divisorの倍数ごとにseedを進める（永続カウント、独立インスタンス）
 
-これらのノードは、特にLoRAモデル、Embedding、ワイルドカード、プロンプト、バッチ操作、画像処理、パス管理を扱う際に、ComfyUIのワークフローを効率化するよう設計されています。
+これらのノードは、特にLoRAモデル、Embedding、ワイルドカード、プロンプト、バッチ操作、画像処理、パス管理、シード制御を扱う際に、ComfyUIのワークフローを効率化するよう設計されています。
 
 ---
 
@@ -82,6 +84,7 @@ ComfyUIを再起動して新しいノードを読み込みます。
 ### 画像処理
 - **Batch Image Processor** - バッチ画像処理
 - **Batch Image Compressor** - 画像一括圧縮（PNG: 60-80%削減、JPEG最適化）
+- **Image Format Converter** - 画像フォーマット一括変換（PNG/JPEG/WebP/BMP/TIFF）
 - **Images to PDF** - 複数画像を1つのPDFに変換
 - **Extract Prompt from Image** - ComfyUI形式画像からプロンプトを抽出
 
@@ -98,6 +101,7 @@ ComfyUIを再起動して新しいノードを読み込みます。
 
 ### ユーティリティ
 - **Get ComfyUI Input Path** - ComfyUIの入力ディレクトリパスを取得
+- **Seed Step N** - divisorの倍数ごとにseedを進める（永続カウント）
 
 ---
 
@@ -971,6 +975,135 @@ Processing: bondage_blowjob
 
 ---
 
+### 15. Image Format Converter
+
+画像ファイルの拡張子を別の拡張子に一括変換します。同じ拡張子への変換はエラーになります。
+
+#### 入力
+
+- **input_folder** (STRING): 入力フォルダ
+- **output_folder** (STRING): 出力フォルダ
+- **source_extension** (選択): 元の拡張子
+  - `.png`, `.jpg`, `.jpeg`, `.bmp`, `.webp`, `.tiff`
+- **target_extension** (選択): 変換先の拡張子
+  - `.png`, `.jpg`, `.jpeg`, `.bmp`, `.webp`, `.tiff`
+- **quality** (INT, optional): JPEG/WebP品質（1-100、デフォルト: 85）
+- **include_subfolders** (BOOLEAN, optional): サブフォルダも含める
+
+#### 出力
+
+- **status** (STRING): 各ファイルの変換結果
+- **file_count** (INT): 変換したファイル数
+
+#### 機能
+
+- ✅ **同じ拡張子チェック**: 元と変換先が同じ場合はエラー
+- ✅ **サブフォルダ対応**: フォルダ構造を保持
+- ✅ **品質設定**: JPEG/WebP品質調整可能
+- ✅ **自動RGB変換**: RGBA → RGB（JPEG/BMP用）
+- ✅ **最適化**: PNG圧縮、JPEG最適化
+
+#### エラー例
+
+```
+source_extension: .png
+target_extension: .png
+
+結果:
+✗ Error: Source and target extensions are the same (.png). 
+   Cannot convert to the same format.
+```
+
+#### 使用例
+
+```
+入力フォルダ: C:/images/
+出力フォルダ: C:/images_converted/
+source_extension: .png
+target_extension: .jpg
+quality: 85
+include_subfolders: False
+
+結果:
+[1/50] image1.png → image1.jpg (+15.2%)
+[2/50] image2.png → image2.jpg (-22.3%)
+[3/50] image3.png → image3.jpg (-18.7%)
+...
+Converted: 50/50 files (.png → .jpg)
+```
+
+---
+
+### 16. Seed Step N
+
+divisorの倍数ごとにseedを進めるノード。各ノードインスタンスごとに独立したカウントを保持し、ComfyUI再起動後も継続します。
+
+#### 入力
+
+- **base_seed** (INT): 基準seed（0 〜 0xffffffffffffffff）
+- **divisor** (INT): 何回の実行ごとにseedを+1するか（1以上）
+  - 1: 毎回+1
+  - 4: 4回ごとに+1
+- **increment_amount** (INT): seedを進める量（デフォルト: 1）
+
+#### 出力
+
+- **seed** (INT): `base_seed + (count // divisor) * increment_amount`
+
+#### 機能
+
+- ✅ **永続カウント**: JSONファイルに保存、ComfyUI再起動後も継続
+- ✅ **独立インスタンス**: 同じワークフロー内の複数ノードは独立してカウント
+- ✅ **リアルタイム表示**: 現在のカウントと次のseedを表示
+- ✅ **リセットボタン**: ノード単位でカウントをリセット可能
+- ✅ **キャッシュバイパス**: 毎回確実に実行（IS_CHANGEDでNaN返却）
+
+#### UI表示
+
+- **Count**: 現在の実行回数
+- **Next seed**: 次回出力予定のseed値
+- **Reset Counter**: カウントを0にリセット
+
+#### 計算例
+
+divisor=4, base_seed=1000, increment_amount=1 の場合：
+
+| 実行回数 (count) | 出力 seed | 備考 |
+|-----------------|----------|------|
+| 0 | 1000 | 1枚目 |
+| 1 | 1000 | 2枚目 |
+| 2 | 1000 | 3枚目 |
+| 3 | 1000 | 4枚目 |
+| 4 | 1001 | 5枚目（seed進む） |
+| 5 | 1001 | 6枚目 |
+| 6 | 1001 | 7枚目 |
+| 7 | 1001 | 8枚目 |
+| 8 | 1002 | 9枚目（seed進む） |
+
+#### 使用例
+
+```
+同じLoRAで4枚ずつ生成し、5枚目でseedを変えたい場合:
+
+base_seed: 1000
+divisor: 4
+increment_amount: 1
+
+結果:
+1〜4枚目: seed 1000
+5〜8枚目: seed 1001
+9〜12枚目: seed 1002
+...
+```
+
+#### 独立カウントの保証
+
+- カウントは `unique_id` をキーに管理
+- 同じワークフローに2つ配置しても別々にカウント
+- カウンターファイル: `ComfyUI/custom_nodes/comfyui-samenodes/seed_step_counters.json`
+
+---
+
 ## プロジェクト構造
 
 ```
@@ -979,6 +1112,7 @@ comfyui-samenodes/
 ├── float_to_string.py               # Float to Stringノードの実装
 ├── batch_processor.py               # Batch Image Processorノードの実装
 ├── batch_image_compressor.py        # Batch Image Compressorノードの実装
+├── image_format_converter.py        # Image Format Converterノードの実装
 ├── images_to_pdf.py                 # Images to PDFノードの実装
 ├── lora_wildcard_generator.py       # LoRA Wildcard Generatorノードの実装
 ├── lora_to_civitai_url.py           # LoRA to Civitai URLノードの実装
@@ -992,11 +1126,14 @@ comfyui-samenodes/
 ├── input_path_node.py               # Get ComfyUI Input Pathノードの実装
 ├── lora_text_dual_input.py          # LoRA Text Dual Inputノードの実装
 ├── lora_tag_power_loader_extended.py # LoRA Tag Power Loader Extendedノードの実装
+├── seed_step_n.py                   # Seed Step Nノードの実装
 ├── .env.example                     # Civitai API用の環境変数テンプレート
 ├── .env                             # 実際の環境変数（gitには含まれません）
 ├── .gitignore                       # Git ignoreルール（.envを除外）
 ├── requirements.txt                 # Python依存関係
 ├── README.md                        # このドキュメントファイル
+├── web/                             # フロントエンドJavaScript
+│   └── seed_step_n.js               # Seed Step N UI拡張
 └── wildcards/                       # ワイルドカード例フォルダ
     └── clothing.yaml                # 衣服ワイルドカード例
 ```
