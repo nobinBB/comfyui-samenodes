@@ -47,6 +47,7 @@ class SeedStepN:
     FUNCTION = "calculate_seed"
     CATEGORY = "utils/seed"
     OUTPUT_NODE = True
+    OUTPUT_IS_LIST = (False,)
 
     @classmethod
     def IS_CHANGED(cls, **kwargs):
@@ -122,7 +123,14 @@ class SeedStepN:
         # Save counters
         self.save_counters(counters)
 
-        return (seed,)
+        # Return seed with UI information for frontend
+        return {
+            "ui": {
+                "count": [count + 1],
+                "next_seed": [next_seed]
+            },
+            "result": (seed,)
+        }
 
     @classmethod
     def reset_counter(cls, unique_id):
