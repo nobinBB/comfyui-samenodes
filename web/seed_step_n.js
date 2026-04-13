@@ -137,14 +137,19 @@ app.registerExtension({
             const data = event.detail;
 
             if (data.node === node.id.toString()) {
-                // Node was executed, increment count display
-                const countMatch = countWidget.value.match(/Count: (\d+)/);
-                const currentCount = countMatch ? parseInt(countMatch[1]) : 0;
-                const newCount = currentCount + 1;
+                // Node was executed, update display from backend data
+                if (data.output && data.output.count && data.output.count.length > 0) {
+                    const newCount = data.output.count[0];
+                    const nextSeed = data.output.next_seed && data.output.next_seed.length > 0
+                        ? data.output.next_seed[0]
+                        : 0;
 
-                countWidget.value = `Count: ${newCount}`;
-                updateNextSeed();
-                node.setDirtyCanvas(true);
+                    countWidget.value = `Count: ${newCount}`;
+                    nextSeedWidget.value = `Next seed: ${nextSeed}`;
+                    node.setDirtyCanvas(true);
+
+                    console.log(`SeedStepN (${node.id}): Count updated to ${newCount}, Next seed: ${nextSeed}`);
+                }
             }
         });
 
