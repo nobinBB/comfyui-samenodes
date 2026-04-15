@@ -18,7 +18,7 @@ ComfyUIのワークフローを強化する、文字列変換、バッチ処理�
 - **Images to PDF**: 複数画像を1つのPDFに変換
 - **Extract Prompt from Image**: 画像メタデータからプロンプトを抽出（ComfyUI形式）
 - **A1111 Prompt Splitter**: A1111/SD WebUI画像からポジティブ・ネガティブプロンプトを抽出
-- **SD Prompt Saver (Optimized)**: A1111互換メタデータ埋め込み + oxipngロスレス圧縮（20-45%削減）
+- **SD Prompt Saver (Optimized)**: A1111互換メタデータ埋め込み + ロスレス圧縮（PNG/WebP/JPEG対応、20-45%削減）
 
 ### LoRA管理
 - **LoRA Wildcard Generator**: Civitaiメタデータから自動的にYAMLワイルドカードを生成
@@ -88,7 +88,7 @@ ComfyUIを再起動して新しいノードを読み込みます。
 - **Image Format Converter** - 画像フォーマット一括変換（PNG/JPEG/WebP/BMP/TIFF）
 - **Images to PDF** - 複数画像を1つのPDFに変換
 - **Extract Prompt from Image** - ComfyUI形式画像からプロンプトを抽出
-- **SD Prompt Saver (Optimized)** - A1111互換メタデータ + oxipng圧縮（20-45%削減）
+- **SD Prompt Saver (Optimized)** - A1111互換メタデータ + ロスレス圧縮（PNG/WebP/JPEG、20-45%削減）
 
 ### LoRA管理
 - **LoRA Wildcard Generator** - CivitaiメタデータからYAMLワイルドカード生成
@@ -1108,10 +1108,13 @@ increment_amount: 1
 
 ### 17. SD Prompt Saver (Optimized)
 
-A1111互換メタデータを埋め込み、oxipngでロスレス圧縮するPNG画像保存ノード。
-`receyuki/comfyui-prompt-reader-node` の `SDPromptSaver` をベースに拡張。
+A1111互換メタデータを埋め込み、ロスレス圧縮して保存するノード。
+PNG/WebP/JPEG全フォーマット対応。`receyuki/comfyui-prompt-reader-node` の `SDPromptSaver` をベースに拡張。
 
 #### 入力
+
+**フォーマット:**
+- **extension** (COMBO): 保存形式（`png` / `webp` / `jpg` / `jpeg`、デフォルト: `png`）
 
 **ファイル名・パス設定:**
 - **filename** (STRING): ファイル名テンプレート（デフォルト: `ComfyUI_%time_%seed_%counter`）
@@ -1139,25 +1142,36 @@ A1111互換メタデータを埋め込み、oxipngでロスレス圧縮するPNG
 - **resource_hash** (BOOLEAN): LoRAハッシュ計算（デフォルト: True）
 - **save_metadata_file** (BOOLEAN): メタデータをTXTファイルにも保存（デフォルト: False）
 
-**oxipng最適化:**
+**圧縮最適化:**
 - **optimization_level** (INT): 最適化レベル（0〜6、デフォルト: 4）
-  - 0: 最速（ほぼ無圧縮）
-  - 4: バランス（推奨）
-  - 6: 最大圧縮（遅い）
-- **use_zopfli** (BOOLEAN): Zopfli圧縮有効化（デフォルト: False）
-  - True: 圧縮率30-45%（遅い）
-  - False: 圧縮率20-35%（速い）
-- **preserve_metadata** (BOOLEAN): メタデータ保持（デフォルト: True）
+  - PNG: oxipngの`-o`オプション（0=最速、6=最大圧縮）
+  - WebP: cwebpの`-z`にスケーリング（0-6 → 0-9）
+  - JPEG: レベル値は無視（jpegtranはレベル不要）
+- **use_zopfli** (BOOLEAN): PNGのみ有効。Zopfli圧縮（デフォルト: False）
+  - True: 圧縮率30-45%（遅い）/ False: 圧縮率20-35%（速い）
+- **preserve_metadata** (BOOLEAN): メタデータ保持（デフォルト: True、推奨）
   - True: A1111形式メタデータとComfyUIワークフローを保持
-  - False: `--strip safe` でメタデータ削除（非推奨）
+  - False: メタデータ削除（SD Prompt Readerで読めなくなる）
 - **show_compression_log** (BOOLEAN): 圧縮率ログ出力（デフォルト: True）
-- **skip_optimization** (BOOLEAN): oxipng処理をスキップ（デフォルト: False）
+- **skip_optimization** (BOOLEAN): 最適化をスキップ（デフォルト: False）
 
 #### 出力
 
 - **FILENAME** (STRING): 保存したファイル名
 - **FILE_PATH** (STRING): 保存したフルパス
 - **METADATA** (STRING): 埋め込んだA1111形式メタデータ文字列
+
+#### フォーマット別の圧縮方式
+
+| フォーマット | 外部ツール | フォールバック | 圧縮率 | 特徴 |
+|-------------|-----------|--------------|--------|------|
+| PNG | oxipng | なし（警告のみ） | 20-45% | 最も推奨。ロスレスで高圧縮 |
+| WebP | cwebp -lossless | Pillow lossless | 20-40% | ロスレスWebP。最初から小さい |
+| JPEG | jpegtran → jpegoptim | なし（警告のみ） | 3-15% | ハフマン再エンコード、画素データ変更なし |
+
+- 全て**完全ロスレス**（画素データ変更なし）
+- 外部ツールが無くてもファイルは保存される（最適化なしのみ）
+- WebPのみPillowフォールバックあり（cwebpなしでも最適化可能）
 
 #### ファイル名テンプレート
 
@@ -1175,52 +1189,65 @@ A1111互換メタデータを埋め込み、oxipngでロスレス圧縮するPNG
 
 #### A1111形式メタデータ
 
-PNGの `tEXt` チャンクに `parameters` キーで埋め込み:
-```
-{positive}
-Negative prompt: {negative}
-Steps: {steps}, Sampler: {sampler_name}_{scheduler}, CFG scale: {cfg}, Seed: {seed}, Size: {width}x{height}, Model hash: {model_hash}, Model: {model_name}, VAE: {vae_name}, Lora hashes: "{lora_hashes}", Version: ComfyUI
-```
-
+- PNG: `tEXt` チャンクに `parameters` キーで埋め込み
+- WebP/JPEG: EXIFのUserCommentに埋め込み（piexifが必要: `pip install piexif`）
 - SD Prompt Reader、Civitai、A1111 WebUIで読み取り可能
-- ComfyUIの `prompt` と `workflow` も同時埋め込み（ドラッグ&ドロップ復元対応）
+- ComfyUIの `prompt` と `workflow` も同時埋め込み（PNG限定、ドラッグ&ドロップ復元対応）
 
-#### oxipngのインストール
+#### 圧縮ツールのインストール
 
-**Windows:**
-1. [GitHub Releases](https://github.com/shssoichiro/oxipng/releases) からexeをダウンロード
-2. PATHに追加
-
-**Mac:**
+**oxipng（PNG用）:**
 ```bash
-brew install oxipng
+# Windows: https://github.com/shssoichiro/oxipng/releases からexeをDL、PATH追加
+brew install oxipng        # Mac
+cargo install oxipng       # Linux (Cargo)
+apt install oxipng         # Linux (Debian/Ubuntu)
 ```
 
-**Linux:**
+**cwebp（WebP用）:**
 ```bash
-# Cargo経由
-cargo install oxipng
+# Windows: https://developers.google.com/speed/webp/download からDL、PATH追加
+brew install webp          # Mac
+apt install webp           # Linux (Debian/Ubuntu)
+dnf install libwebp-tools  # Linux (Fedora)
+```
 
-# またはパッケージマネージャ
-apt install oxipng  # Debian/Ubuntu
-dnf install oxipng  # Fedora
+**jpegtran（JPEG用）:**
+```bash
+# Windows: https://jpegclub.org/jpegtran/ からDL、PATH追加
+brew install jpeg-turbo    # Mac
+apt install libjpeg-turbo-progs  # Linux (Debian/Ubuntu)
 ```
 
 **確認:**
 ```bash
 oxipng --version
+cwebp -version
+jpegtran -v 2>&1 | head -1
+```
+
+**piexif（JPEG/WebPメタデータ用）:**
+```bash
+pip install piexif
 ```
 
 #### 圧縮率の目安
 
-AI生成PNG画像での圧縮率（実測値）:
-- `optimization_level=4, use_zopfli=False`: 20-35%削減
-- `optimization_level=6, use_zopfli=True`: 30-45%削減
+AI生成画像での圧縮率（フォーマット別実測値）:
 
-例:
-- 元ファイル: 2,453,120 B
-- 圧縮後: 1,632,448 B
-- 削減率: -33.4%
+| フォーマット | 設定 | 圧縮率 | 備考 |
+|-------------|------|--------|------|
+| PNG | optimization_level=4 | 20-35% | 推奨バランス |
+| PNG | optimization_level=6 + zopfli | 30-45% | 最大圧縮（遅い） |
+| WebP | cwebp -lossless -m 6 | 20-40% | PNGより小さくなることも |
+| WebP | Pillowロスレス（cwebp無し） | 5-20% | フォールバック |
+| JPEG | jpegtran -optimize | 3-15% | ハフマン最適化のみ |
+
+例（PNG → oxipng -o4）:
+```
+saved: D:/output/2026-04-15/ComfyUI_153022_1234567_0001.png
+optimized: 2,453,120 B → 1,632,448 B (-33.4%)
+```
 
 #### 使用例
 
@@ -1229,23 +1256,26 @@ AI生成PNG画像での圧縮率（実測値）:
 1. KSamplerでpositive/negativeプロンプトを使用
 2. 生成した画像をSD Prompt Saver (Optimized)に接続
 3. パラメータ設定:
+   - extension: png (または webp / jpg)
    - filename: "MyArt_%date_%time_%seed"
    - path: "renders/%model/"
    - optimization_level: 4
    - use_zopfli: False (速度重視)
    - preserve_metadata: True (必須)
-4. 実行すると以下のように保存:
-   - ファイル: ComfyUI/output/renders/myModel/MyArt_2026-04-15_153022_1234567.png
-   - メタデータ: A1111形式 + ComfyUIワークフロー埋め込み
-   - 圧縮: 自動でoxipng実行
+4. 実行すると:
+   - ファイル保存 + メタデータ埋め込み
+   - 自動でロスレス圧縮実行
+   - コンソールに圧縮率表示
 ```
 
 #### 注意点
 
 - `preserve_metadata=True` を推奨（FalseだとA1111メタデータも削除される）
-- oxipngが無い場合でも画像は保存される（警告のみ）
+- 各ツールが無くても画像は保存される（警告のみ、クラッシュしない）
+- WebPはcwebpがなくてもPillowロスレスでフォールバック
 - バッチ画像対応（B次元を1枚ずつ処理、counterは自動インクリメント）
 - ファイル名の重複は自動回避（counter自動調整）
+- piexif未インストールの場合はJPEG/WebPにA1111メタデータが埋め込まれない
 
 #### ライセンス
 
