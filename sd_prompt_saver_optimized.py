@@ -1,12 +1,12 @@
 """
 SD Prompt Saver Optimized Node for ComfyUI
-Saves images with A1111-compatible metadata and lossless compression
+Saves images with A1111-compatible metadata and hybrid compression
 
 Based on: https://github.com/receyuki/comfyui-prompt-reader-node
 License: MIT (original project)
 
 Hybrid compression (external tools + Pillow fallback):
-  PNG  -> oxipng (20-45%) → Pillow compress_level=9 (10-25%)
+  PNG  -> pngquant 85-95 (30-40%, visually lossless) + oxipng (5-10%) = 35-50% total
   WebP -> cwebp lossless (20-40%) → Pillow lossless (5-20%)
   JPEG -> jpegtran (3-15%) → Pillow optimize (5-15%)
 
@@ -283,12 +283,50 @@ class SDPromptSaverOptimized:
     # ------------------------------------------------------------------
 
     def optimize_png(self, file_path: Path, preserve_metadata: bool, show_log: bool):
-        """PNG: oxipng (20-45%) → Pillow compress_level=9 (10-25%)"""
+        """PNG: pngquant 85-95 (30-40%) + oxipng (5-10%) = 35-50% total"""
         original_size = os.path.getsize(file_path)
+        current_size = original_size
+        pngquant_used = False
+        oxipng_used = False
 
-        # Try oxipng first
+        # Step 1: pngquant (lossy compression, visually lossless quality)
         try:
-            cmd = ["oxipng", "-o", "4", "--quiet"]
+            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+                tmp_path = Path(tmp.name)
+
+            cmd = ["pngquant", "--quality=85-95", "--speed", "1"]
+            if not preserve_metadata:
+                cmd.append("--strip")
+            cmd.extend(["--output", str(tmp_path), str(file_path)])
+
+            result = subprocess.run(cmd, check=False, capture_output=True,
+                                   text=True, timeout=60)
+
+            if result.returncode == 0 and tmp_path.exists():
+                tmp_size = tmp_path.stat().st_size
+                if tmp_size < current_size:  # Only replace if smaller
+                    tmp_path.replace(file_path)
+                    after_pngquant = tmp_size
+                    pngquant_used = True
+                    if show_log:
+                        reduction1 = (current_size - after_pngquant) / current_size * 100
+                        print(f"[SDPromptSaverOptimized] PNG (pngquant 85-95): {current_size:,} B → {after_pngquant:,} B (-{reduction1:.1f}%)")
+                    current_size = after_pngquant
+                else:
+                    tmp_path.unlink(missing_ok=True)
+            else:
+                tmp_path.unlink(missing_ok=True)
+
+        except FileNotFoundError:
+            pass  # pngquant not found, continue to oxipng
+        except Exception:
+            pass  # pngquant failed, continue to oxipng
+
+        # Step 2: oxipng (lossless compression, 5-10% additional)
+        try:
+            before_oxipng = current_size
+
+            cmd = ["oxipng", "-o", "6", "--quiet"]
             if not preserve_metadata:
                 cmd.extend(["--strip", "safe"])
             cmd.append(str(file_path))
@@ -297,35 +335,54 @@ class SDPromptSaverOptimized:
                                    text=True, timeout=300)
 
             if result.returncode == 0:
-                final_size = os.path.getsize(file_path)
-                if show_log:
-                    reduction = (original_size - final_size) / original_size * 100 if original_size > 0 else 0
-                    print(f"[SDPromptSaverOptimized] PNG (oxipng): {original_size:,} B → {final_size:,} B (-{reduction:.1f}%)")
-                return
+                after_oxipng = os.path.getsize(file_path)
+                oxipng_used = True
+                if show_log and after_oxipng < before_oxipng:
+                    reduction2 = (before_oxipng - after_oxipng) / before_oxipng * 100
+                    print(f"[SDPromptSaverOptimized] PNG (oxipng): {before_oxipng:,} B → {after_oxipng:,} B (-{reduction2:.1f}%)")
+                current_size = after_oxipng
+
         except FileNotFoundError:
-            pass  # oxipng not found, fallback to Pillow
+            pass  # oxipng not found
         except Exception:
-            pass  # oxipng failed, fallback to Pillow
+            pass  # oxipng failed
 
-        # Fallback: Pillow re-compress with maximum compression
-        try:
-            with Image.open(str(file_path)) as img:
-                # Extract existing metadata
-                pnginfo = PngInfo()
-                if hasattr(img, 'text') and img.text:
-                    for key, value in img.text.items():
-                        pnginfo.add_text(key, value)
+        # If no external tools worked, fallback to Pillow
+        if not pngquant_used and not oxipng_used:
+            try:
+                before_pillow = current_size
+                with Image.open(str(file_path)) as img:
+                    # Extract existing metadata
+                    pnginfo = PngInfo()
+                    if hasattr(img, 'text') and img.text:
+                        for key, value in img.text.items():
+                            pnginfo.add_text(key, value)
 
-                img.save(str(file_path), format="PNG", pnginfo=pnginfo,
-                        compress_level=9, optimize=True)
+                    img.save(str(file_path), format="PNG", pnginfo=pnginfo,
+                            compress_level=9, optimize=True)
 
-            final_size = os.path.getsize(file_path)
-            if show_log:
-                reduction = (original_size - final_size) / original_size * 100 if original_size > 0 else 0
-                print(f"[SDPromptSaverOptimized] PNG (Pillow): {original_size:,} B → {final_size:,} B (-{reduction:.1f}%)")
-        except Exception as e:
-            if show_log:
-                print(f"[SDPromptSaverOptimized] PNG optimization failed: {e}")
+                after_pillow = os.path.getsize(file_path)
+                current_size = after_pillow
+                if show_log:
+                    reduction = (before_pillow - after_pillow) / before_pillow * 100 if before_pillow > 0 else 0
+                    print(f"[SDPromptSaverOptimized] PNG (Pillow): {before_pillow:,} B → {after_pillow:,} B (-{reduction:.1f}%)")
+            except Exception as e:
+                if show_log:
+                    print(f"[SDPromptSaverOptimized] PNG optimization failed: {e}")
+
+        # Final summary
+        if show_log and current_size < original_size:
+            total_reduction = (original_size - current_size) / original_size * 100
+            tools = []
+            if pngquant_used:
+                tools.append("pngquant")
+            if oxipng_used:
+                tools.append("oxipng")
+            if not tools:
+                tools.append("Pillow")
+
+            print(f"[SDPromptSaverOptimized] PNG Total ({'+'.join(tools)}): {original_size:,} B → {current_size:,} B (-{total_reduction:.1f}%)")
+            print(f"{'='*60}")
 
     def optimize_webp(self, file_path: Path, preserve_metadata: bool, show_log: bool):
         """WebP: cwebp lossless (20-40%) → Pillow lossless (5-20%)"""
