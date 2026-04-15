@@ -1,21 +1,19 @@
 """
 SD Prompt Saver Optimized Node for ComfyUI
-Saves images with A1111-compatible metadata and lossless compression
+Saves images with A1111-compatible metadata and lossless compression using Pillow
 
 Based on: https://github.com/receyuki/comfyui-prompt-reader-node
 License: MIT (original project)
 
-Supported formats and compression tools:
-  PNG  -> oxipng (lossless, 20-45% reduction)
-  WebP -> lossless WebP via cwebp or Pillow (20-40% reduction)
-  JPEG -> jpegtran or jpegoptim (lossless optimization, 3-15% reduction)
+Compression via Pillow (no external tools required):
+  PNG  -> compress_level=9 (lossless, 10-25% reduction)
+  WebP -> lossless mode (lossless, 15-35% reduction, often smaller than PNG)
+  JPEG -> optimize + progressive (near-lossless, 5-15% reduction)
 """
 
 import os
 import json
-import subprocess
 import hashlib
-import tempfile
 from pathlib import Path
 from datetime import datetime
 from PIL import Image
@@ -142,23 +140,17 @@ class SDPromptSaverOptimized:
                 }),
 
                 # Compression optimization
-                "optimization_level": ("INT", {
-                    "default": 4,
-                    "min": 0,
-                    "max": 6,
+                "jpeg_quality": ("INT", {
+                    "default": 95,
+                    "min": 60,
+                    "max": 100,
                     "step": 1
-                }),
-                "use_zopfli": ("BOOLEAN", {
-                    "default": False,
                 }),
                 "preserve_metadata": ("BOOLEAN", {
                     "default": True
                 }),
                 "show_compression_log": ("BOOLEAN", {
                     "default": True
-                }),
-                "skip_optimization": ("BOOLEAN", {
-                    "default": False
                 }),
             },
             "hidden": {
@@ -232,7 +224,9 @@ class SDPromptSaverOptimized:
             return None
 
     def save_png(self, img: Image.Image, file_path: Path, metadata_text: str,
-                 prompt, extra_pnginfo):
+                 prompt, extra_pnginfo, show_log: bool):
+        """Save PNG with maximum lossless compression (compress_level=9)"""
+        original_size = 0
         pnginfo = PngInfo()
         pnginfo.add_text("parameters", metadata_text)
         if prompt is not None:
@@ -240,23 +234,37 @@ class SDPromptSaverOptimized:
         if extra_pnginfo is not None:
             for key in extra_pnginfo:
                 pnginfo.add_text(key, json.dumps(extra_pnginfo[key]))
-        img.save(str(file_path), pnginfo=pnginfo, compress_level=4)
+
+        # Save with maximum compression
+        img.save(str(file_path), format="PNG", pnginfo=pnginfo,
+                compress_level=9, optimize=True)
+
+        if show_log:
+            final_size = os.path.getsize(file_path)
+            print(f"[SDPromptSaverOptimized] PNG saved: {final_size:,} B (compress_level=9)")
 
     def save_webp(self, img: Image.Image, file_path: Path, metadata_text: str,
-                  prompt, extra_pnginfo):
+                  prompt, extra_pnginfo, show_log: bool):
+        """Save WebP in lossless mode (often smaller than PNG)"""
         exif_bytes = self._make_exif_bytes(metadata_text)
         save_kwargs = {
             "format": "WEBP",
             "lossless": True,
-            "method": 6,
             "quality": 100,
+            "method": 6,  # slowest but best compression
         }
         if exif_bytes:
             save_kwargs["exif"] = exif_bytes
+
         img.save(str(file_path), **save_kwargs)
 
+        if show_log:
+            final_size = os.path.getsize(file_path)
+            print(f"[SDPromptSaverOptimized] WebP saved: {final_size:,} B (lossless mode)")
+
     def save_jpeg(self, img: Image.Image, file_path: Path, metadata_text: str,
-                  prompt, extra_pnginfo):
+                  prompt, extra_pnginfo, quality: int, show_log: bool):
+        """Save JPEG with optimize + progressive (near-lossless quality)"""
         # JPEG requires RGB
         if img.mode in ("RGBA", "LA", "P"):
             rgb = Image.new("RGB", img.size, (255, 255, 255))
@@ -267,181 +275,24 @@ class SDPromptSaverOptimized:
             else:
                 rgb.paste(img)
             img = rgb
+
         exif_bytes = self._make_exif_bytes(metadata_text)
-        save_kwargs = {"format": "JPEG", "quality": 95, "optimize": True}
+        save_kwargs = {
+            "format": "JPEG",
+            "quality": quality,
+            "optimize": True,
+            "progressive": True,
+            "subsampling": 0,  # 4:4:4 (no chroma subsampling for best quality)
+        }
         if exif_bytes:
             save_kwargs["exif"] = exif_bytes
+
         img.save(str(file_path), **save_kwargs)
 
-    # ------------------------------------------------------------------
-    # Lossless compression
-    # ------------------------------------------------------------------
+        if show_log:
+            final_size = os.path.getsize(file_path)
+            print(f"[SDPromptSaverOptimized] JPEG saved: {final_size:,} B (quality={quality}, optimized)")
 
-    def _log_size(self, label: str, original: int, optimized: int, show: bool):
-        if not show:
-            return
-        if original > 0:
-            reduction = (original - optimized) / original * 100
-            print(f"[SDPromptSaverOptimized] {label}: {original:,} B → {optimized:,} B (-{reduction:.1f}%)")
-
-    def optimize_png(self, file_path: Path, optimization_level: int,
-                     use_zopfli: bool, preserve_metadata: bool,
-                     show_log: bool) -> bool:
-        """oxipng – lossless PNG compression (20-45%)"""
-        try:
-            original = os.path.getsize(file_path)
-            cmd = ["oxipng", "-o", str(optimization_level)]
-            if use_zopfli:
-                cmd.append("-Z")
-            if not preserve_metadata:
-                cmd.extend(["--strip", "safe"])
-            cmd.append(str(file_path))
-            result = subprocess.run(cmd, check=False, capture_output=True,
-                                    text=True, timeout=300)
-            if result.returncode != 0 and result.stderr:
-                print(f"[SDPromptSaverOptimized] oxipng warning: {result.stderr.strip()}")
-            self._log_size("PNG (oxipng)", original, os.path.getsize(file_path), show_log)
-            return True
-        except FileNotFoundError:
-            print("[SDPromptSaverOptimized] WARNING: oxipng not found.")
-            print("  Windows: https://github.com/shssoichiro/oxipng/releases")
-            print("  Mac:     brew install oxipng")
-            print("  Linux:   cargo install oxipng")
-            return False
-        except Exception as e:
-            print(f"[SDPromptSaverOptimized] oxipng error: {e}")
-            return False
-
-    def optimize_webp(self, file_path: Path, optimization_level: int,
-                      preserve_metadata: bool, show_log: bool) -> bool:
-        """
-        cwebp lossless compression – lossless recompress WebP.
-        Falls back to Pillow lossless re-save if cwebp is unavailable.
-        optimization_level 0-6 maps to cwebp -z 0-9.
-        """
-        original = os.path.getsize(file_path)
-
-        # cwebp path
-        try:
-            z_level = min(int(optimization_level * 1.5), 9)  # scale 0-6 → 0-9
-            with tempfile.NamedTemporaryFile(suffix=".webp", delete=False) as tmp:
-                tmp_path = Path(tmp.name)
-
-            cmd = ["cwebp", "-lossless", "-m", "6", "-z", str(z_level),
-                   str(file_path), "-o", str(tmp_path)]
-            if not preserve_metadata:
-                cmd += ["-metadata", "none"]
-            else:
-                cmd += ["-metadata", "all"]
-
-            result = subprocess.run(cmd, check=False, capture_output=True,
-                                    text=True, timeout=300)
-            if result.returncode == 0 and tmp_path.exists():
-                tmp_size = tmp_path.stat().st_size
-                if tmp_size < original:
-                    tmp_path.replace(file_path)
-                    self._log_size("WebP (cwebp)", original, tmp_size, show_log)
-                    return True
-                else:
-                    tmp_path.unlink(missing_ok=True)
-                    if show_log:
-                        print(f"[SDPromptSaverOptimized] WebP: already optimal, skipping")
-                    return True
-            else:
-                tmp_path.unlink(missing_ok=True)
-                if result.stderr:
-                    print(f"[SDPromptSaverOptimized] cwebp warning: {result.stderr.strip()}")
-
-        except FileNotFoundError:
-            print("[SDPromptSaverOptimized] INFO: cwebp not found, using Pillow lossless re-save.")
-            print("  Windows: https://developers.google.com/speed/webp/download")
-            print("  Mac:     brew install webp")
-            print("  Linux:   apt install webp  or  dnf install libwebp-tools")
-
-        except Exception as e:
-            print(f"[SDPromptSaverOptimized] cwebp error: {e}")
-
-        # Pillow fallback – lossless re-save (always safe, same pixel data)
-        try:
-            with Image.open(str(file_path)) as img:
-                img.save(str(file_path), format="WEBP", lossless=True,
-                         method=6, quality=100)
-            new_size = os.path.getsize(file_path)
-            self._log_size("WebP (Pillow lossless)", original, new_size, show_log)
-            return True
-        except Exception as e:
-            print(f"[SDPromptSaverOptimized] WebP Pillow fallback error: {e}")
-            return False
-
-    def optimize_jpeg(self, file_path: Path, preserve_metadata: bool,
-                      show_log: bool) -> bool:
-        """
-        jpegtran lossless JPEG optimization (Huffman re-encoding, 3-15%).
-        Falls back to jpegoptim if jpegtran is not found.
-        JPEG pixels are never modified – truly lossless.
-        """
-        original = os.path.getsize(file_path)
-
-        # jpegtran
-        try:
-            copy_flag = "all" if preserve_metadata else "none"
-            with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
-                tmp_path = Path(tmp.name)
-            cmd = ["jpegtran", "-optimize", "-progressive",
-                   "-copy", copy_flag, "-outfile", str(tmp_path), str(file_path)]
-            result = subprocess.run(cmd, check=False, capture_output=True,
-                                    text=True, timeout=120)
-            if result.returncode == 0 and tmp_path.exists():
-                tmp_size = tmp_path.stat().st_size
-                if tmp_size < original:
-                    tmp_path.replace(file_path)
-                    self._log_size("JPEG (jpegtran)", original, tmp_size, show_log)
-                    return True
-                else:
-                    tmp_path.unlink(missing_ok=True)
-                    if show_log:
-                        print(f"[SDPromptSaverOptimized] JPEG: already optimal")
-                    return True
-            else:
-                tmp_path.unlink(missing_ok=True)
-
-        except FileNotFoundError:
-            pass  # try jpegoptim next
-
-        except Exception as e:
-            print(f"[SDPromptSaverOptimized] jpegtran error: {e}")
-
-        # jpegoptim fallback
-        try:
-            strip_flag = "--strip-none" if preserve_metadata else "--strip-all"
-            cmd2 = ["jpegoptim", strip_flag, str(file_path)]
-            subprocess.run(cmd2, check=False, capture_output=True, text=True, timeout=120)
-            self._log_size("JPEG (jpegoptim)", original, os.path.getsize(file_path), show_log)
-            return True
-
-        except FileNotFoundError:
-            print("[SDPromptSaverOptimized] WARNING: jpegtran / jpegoptim not found.")
-            print("  Windows: https://jpegclub.org/jpegtran/")
-            print("  Mac:     brew install jpeg-turbo  (includes jpegtran)")
-            print("  Linux:   apt install libjpeg-turbo-progs  or  dnf install libjpeg*")
-            return False
-
-        except Exception as e:
-            print(f"[SDPromptSaverOptimized] jpegoptim error: {e}")
-            return False
-
-    def optimize_image(self, file_path: Path, extension: str,
-                       optimization_level: int, use_zopfli: bool,
-                       preserve_metadata: bool, show_log: bool):
-        """Dispatch to format-specific optimizer."""
-        ext = extension.lower().lstrip(".")
-        if ext == "png":
-            self.optimize_png(file_path, optimization_level, use_zopfli,
-                              preserve_metadata, show_log)
-        elif ext == "webp":
-            self.optimize_webp(file_path, optimization_level, preserve_metadata, show_log)
-        elif ext in ("jpg", "jpeg"):
-            self.optimize_jpeg(file_path, preserve_metadata, show_log)
 
     # ------------------------------------------------------------------
     # Main entry
@@ -455,8 +306,8 @@ class SDPromptSaverOptimized:
                     sampler_name="", scheduler="", width=512, height=512,
                     positive="", negative="", lora_name="",
                     calculate_hash=True, resource_hash=True, save_metadata_file=False,
-                    optimization_level=4, use_zopfli=False, preserve_metadata=True,
-                    show_compression_log=True, skip_optimization=False,
+                    jpeg_quality=95, preserve_metadata=True,
+                    show_compression_log=True,
                     prompt=None, extra_pnginfo=None):
 
         output_dir = folder_paths.get_output_directory()
@@ -538,20 +389,18 @@ class SDPromptSaverOptimized:
                 file_name = self.get_path(filename, variable_map)
                 file_path = output_folder / f"{file_name}.{save_suffix}"
 
-            # Save with metadata
+            # Save with metadata (compression handled by Pillow during save)
             if save_suffix == "png":
-                self.save_png(img, file_path, metadata_text, prompt, extra_pnginfo)
+                self.save_png(img, file_path, metadata_text, prompt, extra_pnginfo,
+                             show_compression_log)
             elif save_suffix == "webp":
-                self.save_webp(img, file_path, metadata_text, prompt, extra_pnginfo)
+                self.save_webp(img, file_path, metadata_text, prompt, extra_pnginfo,
+                              show_compression_log)
             else:  # jpg / jpeg
-                self.save_jpeg(img, file_path, metadata_text, prompt, extra_pnginfo)
+                self.save_jpeg(img, file_path, metadata_text, prompt, extra_pnginfo,
+                              jpeg_quality, show_compression_log)
 
             print(f"[SDPromptSaverOptimized] saved: {file_path}")
-
-            # Lossless optimization
-            if not skip_optimization:
-                self.optimize_image(file_path, save_suffix, optimization_level,
-                                    use_zopfli, preserve_metadata, show_compression_log)
 
             # Optional .txt metadata file
             if save_metadata_file:
