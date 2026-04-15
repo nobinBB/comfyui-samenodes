@@ -314,13 +314,19 @@ class SDPromptSaverOptimized:
                     current_size = after_pngquant
                 else:
                     tmp_path.unlink(missing_ok=True)
+                    if show_log:
+                        print(f"[SDPromptSaverOptimized] pngquant output larger than input, skipped")
             else:
                 tmp_path.unlink(missing_ok=True)
+                if show_log and result.returncode != 0:
+                    print(f"[SDPromptSaverOptimized] pngquant failed (code {result.returncode}): {result.stderr.strip()}")
 
         except FileNotFoundError:
-            pass  # pngquant not found, continue to oxipng
-        except Exception:
-            pass  # pngquant failed, continue to oxipng
+            if show_log:
+                print(f"[SDPromptSaverOptimized] pngquant not found in PATH")
+        except Exception as e:
+            if show_log:
+                print(f"[SDPromptSaverOptimized] pngquant error: {e}")
 
         # Step 2: oxipng (lossless compression, 5-10% additional)
         try:
