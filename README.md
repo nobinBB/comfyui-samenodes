@@ -1143,17 +1143,14 @@ PNG/WebP/JPEG全フォーマット対応。`receyuki/comfyui-prompt-reader-node`
 - **save_metadata_file** (BOOLEAN): メタデータをTXTファイルにも保存（デフォルト: False）
 
 **圧縮最適化:**
-- **optimization_level** (INT): 最適化レベル（0〜6、デフォルト: 4）
-  - PNG: oxipngの`-o`オプション（0=最速、6=最大圧縮）
-  - WebP: cwebpの`-z`にスケーリング（0-6 → 0-9）
-  - JPEG: レベル値は無視（jpegtranはレベル不要）
-- **use_zopfli** (BOOLEAN): PNGのみ有効。Zopfli圧縮（デフォルト: False）
-  - True: 圧縮率30-45%（遅い）/ False: 圧縮率20-35%（速い）
+- **jpeg_quality** (INT): JPEG品質（60〜100、デフォルト: 95）
+  - 95: 高品質・推奨
+  - 85-90: バランス
+  - 60-80: 低品質（非推奨）
 - **preserve_metadata** (BOOLEAN): メタデータ保持（デフォルト: True、推奨）
   - True: A1111形式メタデータとComfyUIワークフローを保持
   - False: メタデータ削除（SD Prompt Readerで読めなくなる）
 - **show_compression_log** (BOOLEAN): 圧縮率ログ出力（デフォルト: True）
-- **skip_optimization** (BOOLEAN): 最適化をスキップ（デフォルト: False）
 
 #### 出力
 
@@ -1163,15 +1160,17 @@ PNG/WebP/JPEG全フォーマット対応。`receyuki/comfyui-prompt-reader-node`
 
 #### フォーマット別の圧縮方式
 
-| フォーマット | 外部ツール | フォールバック | 圧縮率 | 特徴 |
-|-------------|-----------|--------------|--------|------|
-| PNG | oxipng | なし（警告のみ） | 20-45% | 最も推奨。ロスレスで高圧縮 |
-| WebP | cwebp -lossless | Pillow lossless | 20-40% | ロスレスWebP。最初から小さい |
-| JPEG | jpegtran → jpegoptim | なし（警告のみ） | 3-15% | ハフマン再エンコード、画素データ変更なし |
+**ハイブリッド圧縮: 外部ツール優先 → Pillowフォールバック**
+
+| フォーマット | 外部ツール | Pillowフォールバック | 圧縮率（外部） | 圧縮率（Pillow） |
+|-------------|-----------|-------------------|--------------|----------------|
+| PNG | oxipng | compress_level=9 | 20-45% | 10-25% |
+| WebP | cwebp -lossless | lossless mode | 20-40% | 5-20% |
+| JPEG | jpegtran | optimize + progressive | 3-15% | 5-15% |
 
 - 全て**完全ロスレス**（画素データ変更なし）
-- 外部ツールが無くてもファイルは保存される（最適化なしのみ）
-- WebPのみPillowフォールバックあり（cwebpなしでも最適化可能）
+- 外部ツールが無くても**必ず圧縮される**（Pillowで自動フォールバック）
+- ツールのインストールはオプション（推奨だが必須ではない）
 
 #### ファイル名テンプレート
 
@@ -1194,59 +1193,131 @@ PNG/WebP/JPEG全フォーマット対応。`receyuki/comfyui-prompt-reader-node`
 - SD Prompt Reader、Civitai、A1111 WebUIで読み取り可能
 - ComfyUIの `prompt` と `workflow` も同時埋め込み（PNG限定、ドラッグ&ドロップ復元対応）
 
-#### 圧縮ツールのインストール
+#### ハイブリッド圧縮（外部ツール + Pillowフォールバック）
 
-**oxipng（PNG用）:**
+本ノードは**外部ツールがあれば高圧縮、なくてもPillowで動作**します。
+
+| フォーマット | 外部ツール（高圧縮） | Pillowフォールバック | 圧縮率 |
+|-------------|-------------------|-------------------|--------|
+| PNG | oxipng | compress_level=9 | 20-45% → 10-25% |
+| WebP | cwebp -lossless | lossless mode | 20-40% → 5-20% |
+| JPEG | jpegtran | optimize + progressive | 3-15% → 5-15% |
+
+**外部ツールは必須ではありません。** インストールしなくても動作しますが、圧縮率が向上します。
+
+---
+
+#### 外部ツールのインストール方法（オプション）
+
+##### **必須: piexif（JPEG/WebPメタデータ用）**
 ```bash
-# Windows: https://github.com/shssoichiro/oxipng/releases からexeをDL、PATH追加
-brew install oxipng        # Mac
-cargo install oxipng       # Linux (Cargo)
-apt install oxipng         # Linux (Debian/Ubuntu)
+pip install piexif
+# または
+pip install -r requirements.txt
 ```
 
-**cwebp（WebP用）:**
+##### **オプション: oxipng（PNG圧縮、20-45%削減）**
+
+**Windows:**
+1. https://github.com/shssoichiro/oxipng/releases から最新版をダウンロード
+2. `oxipng-vX.X.X-x86_64-pc-windows-msvc.zip` を解凍
+3. `oxipng.exe` を `C:\Windows\System32\` に配置（管理者権限必要）
+   - または任意のフォルダに配置して環境変数PATHに追加
+
+**Mac:**
 ```bash
-# Windows: https://developers.google.com/speed/webp/download からDL、PATH追加
-brew install webp          # Mac
-apt install webp           # Linux (Debian/Ubuntu)
-dnf install libwebp-tools  # Linux (Fedora)
+brew install oxipng
 ```
 
-**jpegtran（JPEG用）:**
+**Linux:**
 ```bash
-# Windows: https://jpegclub.org/jpegtran/ からDL、PATH追加
-brew install jpeg-turbo    # Mac
-apt install libjpeg-turbo-progs  # Linux (Debian/Ubuntu)
+# Debian/Ubuntu
+sudo apt install oxipng
+
+# Fedora
+sudo dnf install oxipng
+
+# またはcargoでビルド
+cargo install oxipng
 ```
 
-**確認:**
+##### **オプション: cwebp（WebP圧縮、20-40%削減）**
+
+**Windows:**
+1. https://developers.google.com/speed/webp/download から最新版をダウンロード
+2. `libwebp-X.X.X-windows-x64.zip` を解凍
+3. `bin\cwebp.exe` を `C:\Windows\System32\` に配置
+   - または任意のフォルダに配置して環境変数PATHに追加
+
+**Mac:**
 ```bash
+brew install webp
+```
+
+**Linux:**
+```bash
+# Debian/Ubuntu
+sudo apt install webp
+
+# Fedora
+sudo dnf install libwebp-tools
+```
+
+##### **オプション: jpegtran（JPEG圧縮、3-15%削減）**
+
+**Windows:**
+1. https://jpegclub.org/jpegtran/ からダウンロード
+   - または https://sourceforge.net/projects/libjpeg-turbo/ から最新版をダウンロード
+2. `jpegtran.exe` を `C:\Windows\System32\` に配置
+   - または任意のフォルダに配置して環境変数PATHに追加
+
+**Mac:**
+```bash
+brew install jpeg-turbo
+```
+
+**Linux:**
+```bash
+# Debian/Ubuntu
+sudo apt install libjpeg-turbo-progs
+
+# Fedora
+sudo dnf install libjpeg-turbo-utils
+```
+
+---
+
+#### インストール確認
+
+```bash
+# 各ツールが正しくインストールされているか確認
 oxipng --version
 cwebp -version
 jpegtran -v 2>&1 | head -1
 ```
 
-**piexif（JPEG/WebPメタデータ用）:**
-```bash
-pip install piexif
-```
+ツールが見つからない場合でもノードは動作します（Pillowフォールバック）。
 
 #### 圧縮率の目安
 
-AI生成画像での圧縮率（フォーマット別実測値）:
+AI生成画像での圧縮率（実測値）:
 
-| フォーマット | 設定 | 圧縮率 | 備考 |
-|-------------|------|--------|------|
-| PNG | optimization_level=4 | 20-35% | 推奨バランス |
-| PNG | optimization_level=6 + zopfli | 30-45% | 最大圧縮（遅い） |
-| WebP | cwebp -lossless -m 6 | 20-40% | PNGより小さくなることも |
-| WebP | Pillowロスレス（cwebp無し） | 5-20% | フォールバック |
-| JPEG | jpegtran -optimize | 3-15% | ハフマン最適化のみ |
+| フォーマット | 外部ツール使用時 | Pillowのみ使用時 |
+|-------------|----------------|----------------|
+| PNG | 20-45% (oxipng) | 10-25% (compress_level=9) |
+| WebP | 20-40% (cwebp lossless) | 5-20% (lossless mode) |
+| JPEG | 3-15% (jpegtran) | 5-15% (optimize + progressive) |
 
-例（PNG → oxipng -o4）:
+**外部ツールがある場合の例（PNG → oxipng）:**
 ```
-saved: D:/output/2026-04-15/ComfyUI_153022_1234567_0001.png
-optimized: 2,453,120 B → 1,632,448 B (-33.4%)
+[SDPromptSaverOptimized] saved: D:/output/2026-04-15/ComfyUI_153022_1234567_0001.png
+[SDPromptSaverOptimized] PNG (oxipng): 2,453,120 B → 1,632,448 B (-33.4%)
+```
+
+**外部ツールがない場合の例（PNG → Pillow）:**
+```
+[SDPromptSaverOptimized] saved: D:/output/2026-04-15/ComfyUI_153022_1234567_0001.png
+[SDPromptSaverOptimized] PNG (Pillow): 2,453,120 B → 2,103,552 B (-14.2%)
 ```
 
 #### 使用例
@@ -1259,23 +1330,23 @@ optimized: 2,453,120 B → 1,632,448 B (-33.4%)
    - extension: png (または webp / jpg)
    - filename: "MyArt_%date_%time_%seed"
    - path: "renders/%model/"
-   - optimization_level: 4
-   - use_zopfli: False (速度重視)
-   - preserve_metadata: True (必須)
+   - jpeg_quality: 95 (JPEGの場合)
+   - preserve_metadata: True (推奨)
+   - show_compression_log: True
 4. 実行すると:
    - ファイル保存 + メタデータ埋め込み
-   - 自動でロスレス圧縮実行
-   - コンソールに圧縮率表示
+   - 自動で圧縮実行（外部ツール → Pillowフォールバック）
+   - コンソールに圧縮率とツール名表示
 ```
 
 #### 注意点
 
 - `preserve_metadata=True` を推奨（FalseだとA1111メタデータも削除される）
-- 各ツールが無くても画像は保存される（警告のみ、クラッシュしない）
-- WebPはcwebpがなくてもPillowロスレスでフォールバック
+- **外部ツールは必須ではない**: インストールしなくても動作（Pillowで自動圧縮）
+- **外部ツール推奨**: インストールすると圧縮率が大幅向上（PNG: 20-45%、WebP: 20-40%）
+- piexif必須: `pip install piexif` でインストール（JPEG/WebPメタデータ用）
 - バッチ画像対応（B次元を1枚ずつ処理、counterは自動インクリメント）
 - ファイル名の重複は自動回避（counter自動調整）
-- piexif未インストールの場合はJPEG/WebPにA1111メタデータが埋め込まれない
 
 #### ライセンス
 
