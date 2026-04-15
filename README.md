@@ -18,6 +18,7 @@ ComfyUIのワークフローを強化する、文字列変換、バッチ処理�
 - **Images to PDF**: 複数画像を1つのPDFに変換
 - **Extract Prompt from Image**: 画像メタデータからプロンプトを抽出（ComfyUI形式）
 - **A1111 Prompt Splitter**: A1111/SD WebUI画像からポジティブ・ネガティブプロンプトを抽出
+- **SD Prompt Saver (Optimized)**: A1111互換メタデータ埋め込み + oxipngロスレス圧縮（20-45%削減）
 
 ### LoRA管理
 - **LoRA Wildcard Generator**: Civitaiメタデータから自動的にYAMLワイルドカードを生成
@@ -87,6 +88,7 @@ ComfyUIを再起動して新しいノードを読み込みます。
 - **Image Format Converter** - 画像フォーマット一括変換（PNG/JPEG/WebP/BMP/TIFF）
 - **Images to PDF** - 複数画像を1つのPDFに変換
 - **Extract Prompt from Image** - ComfyUI形式画像からプロンプトを抽出
+- **SD Prompt Saver (Optimized)** - A1111互換メタデータ + oxipng圧縮（20-45%削減）
 
 ### LoRA管理
 - **LoRA Wildcard Generator** - CivitaiメタデータからYAMLワイルドカード生成
@@ -1104,6 +1106,153 @@ increment_amount: 1
 
 ---
 
+### 17. SD Prompt Saver (Optimized)
+
+A1111互換メタデータを埋め込み、oxipngでロスレス圧縮するPNG画像保存ノード。
+`receyuki/comfyui-prompt-reader-node` の `SDPromptSaver` をベースに拡張。
+
+#### 入力
+
+**ファイル名・パス設定:**
+- **filename** (STRING): ファイル名テンプレート（デフォルト: `ComfyUI_%time_%seed_%counter`）
+- **path** (STRING): 保存先パステンプレート（デフォルト: `%date/`）
+  - 相対パス: `ComfyUI/output/` からの相対パス
+  - 絶対パス: そのまま使用（例: `D:/MyImages/`）
+- **date_format** (STRING): `%date` のフォーマット（デフォルト: `%Y-%m-%d`）
+- **time_format** (STRING): `%time` のフォーマット（デフォルト: `%H%M%S`）
+
+**生成パラメータ:**
+- **model_name** (STRING): モデル名
+- **vae_name** (STRING): VAE名
+- **seed** (INT): シード値
+- **steps** (INT): ステップ数
+- **cfg** (FLOAT): CFGスケール
+- **sampler_name** (STRING): サンプラー名
+- **scheduler** (STRING): スケジューラー名
+- **width** / **height** (INT): 画像サイズ
+- **positive** (STRING): ポジティブプロンプト
+- **negative** (STRING): ネガティブプロンプト
+- **lora_name** (STRING): LoRA名
+
+**ハッシュ・メタデータ:**
+- **calculate_hash** (BOOLEAN): モデルハッシュ計算（デフォルト: True）
+- **resource_hash** (BOOLEAN): LoRAハッシュ計算（デフォルト: True）
+- **save_metadata_file** (BOOLEAN): メタデータをTXTファイルにも保存（デフォルト: False）
+
+**oxipng最適化:**
+- **optimization_level** (INT): 最適化レベル（0〜6、デフォルト: 4）
+  - 0: 最速（ほぼ無圧縮）
+  - 4: バランス（推奨）
+  - 6: 最大圧縮（遅い）
+- **use_zopfli** (BOOLEAN): Zopfli圧縮有効化（デフォルト: False）
+  - True: 圧縮率30-45%（遅い）
+  - False: 圧縮率20-35%（速い）
+- **preserve_metadata** (BOOLEAN): メタデータ保持（デフォルト: True）
+  - True: A1111形式メタデータとComfyUIワークフローを保持
+  - False: `--strip safe` でメタデータ削除（非推奨）
+- **show_compression_log** (BOOLEAN): 圧縮率ログ出力（デフォルト: True）
+- **skip_optimization** (BOOLEAN): oxipng処理をスキップ（デフォルト: False）
+
+#### 出力
+
+- **FILENAME** (STRING): 保存したファイル名
+- **FILE_PATH** (STRING): 保存したフルパス
+- **METADATA** (STRING): 埋め込んだA1111形式メタデータ文字列
+
+#### ファイル名テンプレート
+
+使用可能なプレースホルダ:
+- `%date` → date_formatでフォーマット（例: `2026-04-15`）
+- `%time` → time_formatでフォーマット（例: `153022`）
+- `%seed` → seed値（例: `1234567`）
+- `%counter` → 連番（5桁ゼロパディング、例: `00001`）
+- `%model` → モデル名（拡張子なし）
+- `%sampler` → サンプラー名
+- `%scheduler` → スケジューラー名
+- `%steps` → ステップ数
+- `%cfg` → CFG値
+- `%width` / `%height` → 画像サイズ
+
+#### A1111形式メタデータ
+
+PNGの `tEXt` チャンクに `parameters` キーで埋め込み:
+```
+{positive}
+Negative prompt: {negative}
+Steps: {steps}, Sampler: {sampler_name}_{scheduler}, CFG scale: {cfg}, Seed: {seed}, Size: {width}x{height}, Model hash: {model_hash}, Model: {model_name}, VAE: {vae_name}, Lora hashes: "{lora_hashes}", Version: ComfyUI
+```
+
+- SD Prompt Reader、Civitai、A1111 WebUIで読み取り可能
+- ComfyUIの `prompt` と `workflow` も同時埋め込み（ドラッグ&ドロップ復元対応）
+
+#### oxipngのインストール
+
+**Windows:**
+1. [GitHub Releases](https://github.com/shssoichiro/oxipng/releases) からexeをダウンロード
+2. PATHに追加
+
+**Mac:**
+```bash
+brew install oxipng
+```
+
+**Linux:**
+```bash
+# Cargo経由
+cargo install oxipng
+
+# またはパッケージマネージャ
+apt install oxipng  # Debian/Ubuntu
+dnf install oxipng  # Fedora
+```
+
+**確認:**
+```bash
+oxipng --version
+```
+
+#### 圧縮率の目安
+
+AI生成PNG画像での圧縮率（実測値）:
+- `optimization_level=4, use_zopfli=False`: 20-35%削減
+- `optimization_level=6, use_zopfli=True`: 30-45%削減
+
+例:
+- 元ファイル: 2,453,120 B
+- 圧縮後: 1,632,448 B
+- 削減率: -33.4%
+
+#### 使用例
+
+```
+ワークフロー例:
+1. KSamplerでpositive/negativeプロンプトを使用
+2. 生成した画像をSD Prompt Saver (Optimized)に接続
+3. パラメータ設定:
+   - filename: "MyArt_%date_%time_%seed"
+   - path: "renders/%model/"
+   - optimization_level: 4
+   - use_zopfli: False (速度重視)
+   - preserve_metadata: True (必須)
+4. 実行すると以下のように保存:
+   - ファイル: ComfyUI/output/renders/myModel/MyArt_2026-04-15_153022_1234567.png
+   - メタデータ: A1111形式 + ComfyUIワークフロー埋め込み
+   - 圧縮: 自動でoxipng実行
+```
+
+#### 注意点
+
+- `preserve_metadata=True` を推奨（FalseだとA1111メタデータも削除される）
+- oxipngが無い場合でも画像は保存される（警告のみ）
+- バッチ画像対応（B次元を1枚ずつ処理、counterは自動インクリメント）
+- ファイル名の重複は自動回避（counter自動調整）
+
+#### ライセンス
+
+本ノードは [receyuki/comfyui-prompt-reader-node](https://github.com/receyuki/comfyui-prompt-reader-node) (MIT License) をベースに作成されています。
+
+---
+
 ## プロジェクト構造
 
 ```
@@ -1127,6 +1276,7 @@ comfyui-samenodes/
 ├── lora_text_dual_input.py          # LoRA Text Dual Inputノードの実装
 ├── lora_tag_power_loader_extended.py # LoRA Tag Power Loader Extendedノードの実装
 ├── seed_step_n.py                   # Seed Step Nノードの実装
+├── sd_prompt_saver_optimized.py     # SD Prompt Saver (Optimized)ノードの実装
 ├── .env.example                     # Civitai API用の環境変数テンプレート
 ├── .env                             # 実際の環境変数（gitには含まれません）
 ├── .gitignore                       # Git ignoreルール（.envを除外）
