@@ -9,3 +9,6 @@ pyyaml>=6.0
 
 # For image metadata extraction (Extract Prompt from Image)
 Pillow>=9.0.0
+
+# For JPEG/WebP EXIF metadata (SD Prompt Saver Optimized)
+piexif>=1.1.3
