@@ -170,6 +170,27 @@ class SDPromptSaverOptimized:
     OUTPUT_NODE = True
 
     @staticmethod
+    def get_tool_path(tool_name):
+        """
+        Get tool path from local tools folder or system PATH.
+        Priority: ./tools/{tool}.exe → system PATH
+        """
+        tools_dir = Path(__file__).parent / "tools"
+
+        # Windows
+        local_tool = tools_dir / f"{tool_name}.exe"
+        if local_tool.exists():
+            return str(local_tool)
+
+        # Linux/Mac
+        local_tool = tools_dir / tool_name
+        if local_tool.exists():
+            return str(local_tool)
+
+        # Fallback to system PATH
+        return tool_name
+
+    @staticmethod
     def get_time(time_format):
         return datetime.now().strftime(time_format)
 
@@ -294,7 +315,8 @@ class SDPromptSaverOptimized:
             with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
                 tmp_path = Path(tmp.name)
 
-            cmd = ["pngquant", "--quality=85-95", "--speed", "1", "--force"]
+            pngquant_path = self.get_tool_path("pngquant")
+            cmd = [pngquant_path, "--quality=85-95", "--speed", "1", "--force"]
             if not preserve_metadata:
                 cmd.append("--strip")
             cmd.extend(["--output", str(tmp_path), str(file_path)])
@@ -332,7 +354,8 @@ class SDPromptSaverOptimized:
         try:
             before_oxipng = current_size
 
-            cmd = ["oxipng", "-o", "6", "--quiet"]
+            oxipng_path = self.get_tool_path("oxipng")
+            cmd = [oxipng_path, "-o", "6", "--quiet"]
             if not preserve_metadata:
                 cmd.extend(["--strip", "safe"])
             cmd.append(str(file_path))
@@ -399,7 +422,8 @@ class SDPromptSaverOptimized:
             with tempfile.NamedTemporaryFile(suffix=".webp", delete=False) as tmp:
                 tmp_path = Path(tmp.name)
 
-            cmd = ["cwebp", "-lossless", "-m", "6", "-z", "9", "-quiet"]
+            cwebp_path = self.get_tool_path("cwebp")
+            cmd = [cwebp_path, "-lossless", "-m", "6", "-z", "9", "-quiet"]
             if preserve_metadata:
                 cmd += ["-metadata", "all"]
             else:
@@ -449,8 +473,9 @@ class SDPromptSaverOptimized:
             with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
                 tmp_path = Path(tmp.name)
 
+            jpegtran_path = self.get_tool_path("jpegtran")
             copy_flag = "all" if preserve_metadata else "none"
-            cmd = ["jpegtran", "-optimize", "-progressive",
+            cmd = [jpegtran_path, "-optimize", "-progressive",
                    "-copy", copy_flag, "-outfile", str(tmp_path), str(file_path)]
 
             result = subprocess.run(cmd, check=False, capture_output=True,
