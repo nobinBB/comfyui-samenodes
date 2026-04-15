@@ -294,7 +294,7 @@ class SDPromptSaverOptimized:
             with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
                 tmp_path = Path(tmp.name)
 
-            cmd = ["pngquant", "--quality=85-95", "--speed", "1"]
+            cmd = ["pngquant", "--quality=85-95", "--speed", "1", "--force"]
             if not preserve_metadata:
                 cmd.append("--strip")
             cmd.extend(["--output", str(tmp_path), str(file_path)])
