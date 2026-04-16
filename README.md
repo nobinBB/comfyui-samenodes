@@ -1422,9 +1422,24 @@ AI生成画像での圧縮率（実測値）:
 - バッチ画像対応（B次元を1枚ずつ処理、counterは自動インクリメント）
 - ファイル名の重複は自動回避（counter自動調整）
 
-#### ライセンス
+#### ライセンスと帰属
 
-本ノードは [receyuki/comfyui-prompt-reader-node](https://github.com/receyuki/comfyui-prompt-reader-node) (MIT License) をベースに作成されています。
+本ノードは以下のプロジェクトをベースに作成されています：
+
+**SD Prompt Saver (Optimized):**
+```
+Copyright (c) 2023 receyuki (original SD Prompt Saver)
+Copyright (c) 2024 nobinBB (SD Prompt Saver Optimized modifications)
+```
+
+元のプロジェクト: [receyuki/comfyui-prompt-reader-node](https://github.com/receyuki/comfyui-prompt-reader-node)  
+ライセンス: MIT License
+
+**主な変更点:**
+- PNG/WebP/JPEG全フォーマット対応
+- ハイブリッド圧縮（pngquant + oxipng、cwebp、jpegtran）
+- ローカルtoolsフォルダ対応
+- 圧縮率35-50%（PNG）を実現
 
 ---
 
@@ -1457,6 +1472,13 @@ comfyui-samenodes/
 ├── .gitignore                       # Git ignoreルール（.envを除外）
 ├── requirements.txt                 # Python依存関係
 ├── README.md                        # このドキュメントファイル
+├── tools/                           # 外部圧縮ツール配置フォルダ
+│   ├── README.md                    # ツールのインストール手順
+│   ├── .gitkeep                     # Gitフォルダ保持用
+│   ├── pngquant.exe                 # PNG減色ツール（ユーザーが配置）
+│   ├── oxipng.exe                   # PNG最適化ツール（ユーザーが配置）
+│   ├── cwebp.exe                    # WebP圧縮ツール（ユーザーが配置）
+│   └── jpegtran.exe                 # JPEG最適化ツール（ユーザーが配置）
 ├── web/                             # フロントエンドJavaScript
 │   └── seed_step_n.js               # Seed Step N UI拡張
 └── wildcards/                       # ワイルドカード例フォルダ
@@ -1498,13 +1520,58 @@ pip install -r requirements.txt
 
 MIT License
 
-Copyright (c) 2024
+Copyright (c) 2024 nobinBB
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+---
+
+### 派生・改変コンポーネントの帰属
+
+本プロジェクトには、以下のオープンソースプロジェクトをベースに改変したコンポーネントが含まれています：
+
+#### 1. SD Prompt Saver (Optimized)
+- **元のプロジェクト:** [receyuki/comfyui-prompt-reader-node](https://github.com/receyuki/comfyui-prompt-reader-node)
+- **元の著作権:** Copyright (c) 2023 receyuki
+- **改変著作権:** Copyright (c) 2024 nobinBB
+- **ライセンス:** MIT License
+- **ファイル:** `sd_prompt_saver_optimized.py`
+- **主な変更:**
+  - PNG/WebP/JPEG全フォーマット対応
+  - ハイブリッド圧縮（pngquant 85-95 + oxipng、cwebp、jpegtran）
+  - ローカルtoolsフォルダからのツール読み込み
+  - 圧縮率35-50%（PNG）の実現
+
+#### 2. LoRA Tag Power Loader Extended
+- **元のプロジェクト:** LoRA Tag Power Loader
+- **改変著作権:** Copyright (c) 2024 nobinBB
+- **ライセンス:** MIT License
+- **ファイル:** `lora_tag_power_loader_extended.py`
+- **主な変更:**
+  - second_text入力/出力の追加
+  - 元の機能は完全に保持
+
+#### 3. Text Split 3
+- **コンセプト元:** NegativeWildcardsProcessor
+- **実装著作権:** Copyright (c) 2024 nobinBB
+- **ライセンス:** MIT License
+- **ファイル:** `text_split_3.py`
+- **説明:** NegativeWildcardsProcessorの概念を参考に、独自実装
+
+---
+
+### その他のコンポーネント
+
+上記以外のすべてのノード（Float to String、Batch Image Compressor、LoRA Wildcard Generator等）は、nobinBBによる完全なオリジナル実装です。
+
+```
+Copyright (c) 2024 nobinBB
+License: MIT
+```
 
 ---
 
