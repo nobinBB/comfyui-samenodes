@@ -1,5 +1,10 @@
 # ComfyUI Same Nodes
 
+**Languages / 言語 / 语言 / 언어:**  
+🇯🇵 [日本語](README.md) | 🇺🇸 [English](README_EN.md) | 🇨🇳 [简体中文](README_CN.md) | 🇰🇷 [한국어](README_KR.md)
+
+---
+
 ComfyUIのワークフローを強化する、文字列変換、バッチ処理、LoRA管理、自動ダウンロードなどのユーティリティを提供するカスタムノード集です。
 
 ## 概要
