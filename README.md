@@ -1220,6 +1220,35 @@ PNG/WebP/JPEG全フォーマット対応。`receyuki/comfyui-prompt-reader-node`
 
 #### 外部ツールのインストール方法（オプション）
 
+**本ノードは `tools` フォルダからツールを優先的に読み込みます。**
+
+##### **インストール方法（推奨）**
+
+1. **ツールフォルダを作成:**
+   ```
+   ComfyUI/custom_nodes/comfyui-samenodes/tools/
+   ```
+
+2. **各ツールのバイナリを配置:**
+   - Windows: `.exe` ファイル
+   - Linux/Mac: 実行可能ファイル
+
+3. **フォルダ構成:**
+   ```
+   comfyui-samenodes/
+   ├── tools/
+   │   ├── pngquant.exe    # Windows
+   │   ├── oxipng.exe      # Windows
+   │   ├── cwebp.exe       # Windows
+   │   └── jpegtran.exe    # Windows
+   ├── sd_prompt_saver_optimized.py
+   └── ...
+   ```
+
+**ツールが `tools` フォルダに無い場合、システムPATHから実行を試みます。**
+
+---
+
 ##### **必須: piexif（JPEG/WebPメタデータ用）**
 ```bash
 pip install piexif
@@ -1236,8 +1265,8 @@ pip install -r requirements.txt
 **Windows:**
 1. https://pngquant.org/ から最新版をダウンロード
 2. `pngquant-windows.zip` を解凍
-3. `pngquant.exe` を `C:\Windows\System32\` に配置
-   - または任意のフォルダに配置して環境変数PATHに追加
+3. `pngquant.exe` を `ComfyUI/custom_nodes/comfyui-samenodes/tools/` に配置（推奨）
+   - または環境変数PATHに追加
 
 **Mac:**
 ```bash
@@ -1260,8 +1289,8 @@ sudo dnf install pngquant
 **Windows:**
 1. https://github.com/shssoichiro/oxipng/releases から最新版をダウンロード
 2. `oxipng-vX.X.X-x86_64-pc-windows-msvc.zip` を解凍
-3. `oxipng.exe` を `C:\Windows\System32\` に配置（管理者権限必要）
-   - または任意のフォルダに配置して環境変数PATHに追加
+3. `oxipng.exe` を `ComfyUI/custom_nodes/comfyui-samenodes/tools/` に配置（推奨）
+   - または環境変数PATHに追加
 
 **Mac:**
 ```bash
@@ -1285,8 +1314,8 @@ cargo install oxipng
 **Windows:**
 1. https://developers.google.com/speed/webp/download から最新版をダウンロード
 2. `libwebp-X.X.X-windows-x64.zip` を解凍
-3. `bin\cwebp.exe` を `C:\Windows\System32\` に配置
-   - または任意のフォルダに配置して環境変数PATHに追加
+3. `bin\cwebp.exe` を `ComfyUI/custom_nodes/comfyui-samenodes/tools/` に配置（推奨）
+   - または環境変数PATHに追加
 
 **Mac:**
 ```bash
@@ -1307,8 +1336,8 @@ sudo dnf install libwebp-tools
 **Windows:**
 1. https://jpegclub.org/jpegtran/ からダウンロード
    - または https://sourceforge.net/projects/libjpeg-turbo/ から最新版をダウンロード
-2. `jpegtran.exe` を `C:\Windows\System32\` に配置
-   - または任意のフォルダに配置して環境変数PATHに追加
+2. `jpegtran.exe` を `ComfyUI/custom_nodes/comfyui-samenodes/tools/` に配置（推奨）
+   - または環境変数PATHに追加
 
 **Mac:**
 ```bash
