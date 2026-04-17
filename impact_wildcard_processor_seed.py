@@ -282,7 +282,8 @@ class ImpactWildcardProcessorSeed:
         return {
             "ui": {
                 "seed": [calculated_seed],
-                "count": [new_count]
+                "count": [new_count],
+                "populated_text": [result]
             },
             "result": (result,)
         }

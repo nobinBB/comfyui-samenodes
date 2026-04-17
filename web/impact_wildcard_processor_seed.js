@@ -140,6 +140,34 @@ app.registerExtension({
             };
         }
 
+        // Handle mode-based widget state
+        const modeWidget = node.widgets.find(w => w.name === "mode");
+        const populatedTextWidget = node.widgets.find(w => w.name === "populated_text");
+
+        const updateWidgetStates = () => {
+            if (modeWidget && populatedTextWidget) {
+                const mode = modeWidget.value;
+                // In populate mode, populated_text is read-only (like Impact Pack)
+                if (mode === "populate") {
+                    populatedTextWidget.inputEl.disabled = true;
+                    populatedTextWidget.inputEl.placeholder = "Populated Prompt (Will be generated automatically)";
+                } else {
+                    // In fixed/reproduce mode, user can edit populated_text
+                    populatedTextWidget.inputEl.disabled = false;
+                    populatedTextWidget.inputEl.placeholder = "Populated Prompt (Editable in fixed mode)";
+                }
+            }
+        };
+
+        // Update widget states when mode changes
+        if (modeWidget) {
+            const originalCallback = modeWidget.callback;
+            modeWidget.callback = function(value) {
+                if (originalCallback) originalCallback.call(this, value);
+                updateWidgetStates();
+            };
+        }
+
         // Listen for execution complete events
         api.addEventListener("executed", (event) => {
             const data = event.detail;
@@ -159,6 +187,14 @@ app.registerExtension({
                         countWidget.value = `Count: ${count}`;
                     }
 
+                    // Update populated_text widget with processed result (Impact Pack behavior)
+                    if (data.output.populated_text && data.output.populated_text.length > 0) {
+                        const populatedText = data.output.populated_text[0];
+                        if (populatedTextWidget) {
+                            populatedTextWidget.value = populatedText;
+                        }
+                    }
+
                     node.setDirtyCanvas(true);
 
                     console.log(`ImpactWildcardProcessorSeed (${node.id}): Updated display`);
@@ -168,5 +204,6 @@ app.registerExtension({
 
         // Initial update
         updateSeedDisplay();
+        updateWidgetStates();
     }
 });
