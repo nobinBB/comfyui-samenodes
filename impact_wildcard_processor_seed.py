@@ -178,19 +178,6 @@ class ImpactWildcardProcessorSeed:
         else:
             seed = base_seed
 
-        # Print debug info
-        print(f"\n{'='*60}")
-        print(f"ImpactWildcardProcessorSeed (ID: {unique_id})")
-        print(f"{'='*60}")
-        print(f"Seed mode: {seed_mode}")
-        print(f"Base seed: {base_seed}")
-        print(f"Divisor: {divisor}")
-        print(f"Increment amount: {increment_amount}")
-        print(f"Current count: {count}")
-        print(f"Calculated seed: {seed}")
-        print(f"Next count will be: {count + 1}")
-        print(f"{'='*60}\n")
-
         # Increment count
         counters[counter_key] = count + 1
 
@@ -226,17 +213,6 @@ class ImpactWildcardProcessorSeed:
         counters = self.load_counters()
         count = counters.get(counter_key, 0)
 
-        print(f"\n{'='*70}")
-        print(f"[ImpactWildcardProcessorSeed] Node ID: {unique_id}")
-        print(f"{'='*70}")
-        print(f"Mode: {mode}")
-        print(f"Seed mode: {seed_mode}")
-        print(f"Base seed: {base_seed}")
-        print(f"Divisor: {divisor}")
-        print(f"Increment amount: {increment_amount}")
-        print(f"Current count: {count}")
-        print(f"Wildcard text: {wildcard_text[:50]}..." if len(wildcard_text) > 50 else f"Wildcard text: {wildcard_text}")
-
         # Calculate seed based on mode
         seed = self.calculate_seed(base_seed, divisor, increment_amount, seed_mode, unique_id)
 
@@ -248,9 +224,6 @@ class ImpactWildcardProcessorSeed:
         if mode == "fixed":
             # Fixed mode: return populated text as-is
             result = populated if populated else wildcard_text
-            print(f"Fixed mode: returning populated text")
-            print(f"Result: {result[:100]}..." if len(result) > 100 else f"Result: {result}")
-            print(f"{'='*70}\n")
         else:
             # Populate mode: use caching system
             cache = self.load_cache()
@@ -259,49 +232,34 @@ class ImpactWildcardProcessorSeed:
             # Check if we should process wildcard (divisor boundary)
             should_process = (count % divisor) == 0
 
-            print(f"Count position in divisor cycle: {count % divisor} / {divisor}")
-            print(f"Should process wildcard: {should_process}")
-
             if should_process:
                 # Process wildcard and cache result
-                print(f"Processing wildcard with seed: {seed}")
-
                 if WILDCARDS_AVAILABLE and wildcards:
                     try:
                         # Use Impact Pack's wildcard processor
-                        print(f"Using Impact Pack wildcards.process()")
                         result = wildcards.process(wildcard_text, seed)
-                        print(f"Impact Pack result: {result[:100]}..." if len(result) > 100 else f"Impact Pack result: {result}")
                     except Exception as e:
-                        print(f"Error processing wildcards: {e}")
+                        print(f"[ImpactWildcardProcessorSeed] Error processing wildcards: {e}")
                         result = wildcard_text
                 else:
                     # Fallback: simple wildcard processing
-                    print(f"Impact Pack not available, using simple wildcard processing")
                     result = self.simple_wildcard_process(wildcard_text, seed)
-                    print(f"Simple processing result: {result[:100]}..." if len(result) > 100 else f"Simple processing result: {result}")
 
                 # Cache the result
                 cache[cache_key] = result
                 self.save_cache(cache)
-                print(f"Result cached for next {divisor - 1} executions")
             else:
                 # Use cached result
                 if cache_key in cache:
                     result = cache[cache_key]
-                    print(f"Using cached result: {result[:100]}..." if len(result) > 100 else f"Using cached result: {result}")
                 else:
                     # No cache available, process anyway
-                    print(f"WARNING: No cached result found, processing wildcard")
                     if WILDCARDS_AVAILABLE and wildcards:
                         result = wildcards.process(wildcard_text, seed)
                     else:
                         result = self.simple_wildcard_process(wildcard_text, seed)
                     cache[cache_key] = result
                     self.save_cache(cache)
-
-            print(f"Final result: {result[:100]}..." if len(result) > 100 else f"Final result: {result}")
-            print(f"{'='*70}\n")
 
         return {
             "ui": {
