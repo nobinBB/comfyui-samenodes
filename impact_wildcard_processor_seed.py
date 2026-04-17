@@ -40,11 +40,12 @@ except ImportError:
 
 def get_wildcard_list():
     """Get list of available wildcard files including subfolders"""
-    if not WILDCARDS_DIR or not WILDCARDS_DIR.exists():
-        return ["Select the Wildcard to add to the text"]
-
-    wildcard_list = ["Select the Wildcard to add to the text"]
     try:
+        if not WILDCARDS_DIR or not WILDCARDS_DIR.exists():
+            return ["Select the Wildcard to add to the text"]
+
+        wildcard_list = ["Select the Wildcard to add to the text"]
+
         # Recursively get all .txt, .yaml, .yml files
         for file in sorted(WILDCARDS_DIR.rglob("*.*")):
             if file.suffix in [".txt", ".yaml", ".yml"]:
@@ -53,10 +54,11 @@ def get_wildcard_list():
                 # Convert to wildcard format: subfolder/color.txt -> __subfolder/color__
                 wildcard_name = f"__{rel_path.with_suffix('')}__"
                 wildcard_list.append(wildcard_name)
+
+        return wildcard_list
     except Exception as e:
         print(f"[ImpactWildcardProcessorSeed] Error loading wildcard list: {e}")
-
-    return wildcard_list
+        return ["Select the Wildcard to add to the text"]
 
 
 class ImpactWildcardProcessorSeed:
