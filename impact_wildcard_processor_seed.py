@@ -252,9 +252,8 @@ class ImpactWildcardProcessorSeed:
 
             if should_process:
                 # Process wildcard and cache result
-                # Note: In Impact Pack, populated_text is used for processing
-                # UI automatically updates populated_text from wildcard_text in populate mode
-                text_to_process = populated_text if populated_text else wildcard_text
+                # In populate mode, process wildcard_text (not populated_text)
+                text_to_process = wildcard_text
 
                 if WILDCARDS_AVAILABLE and wildcards:
                     try:
@@ -282,7 +281,7 @@ class ImpactWildcardProcessorSeed:
                     print(f"[ImpactWildcardProcessorSeed] Node {unique_id}: Using CACHED result: {result[:50]}...")
                 else:
                     # No cache available, process anyway
-                    text_to_process = populated_text if populated_text else wildcard_text
+                    text_to_process = wildcard_text
                     if WILDCARDS_AVAILABLE and wildcards:
                         result = wildcards.process(text_to_process, calculated_seed)
                     else:
