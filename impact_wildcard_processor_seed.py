@@ -39,24 +39,15 @@ except ImportError:
 
 
 def get_wildcard_list():
-    """Get list of available wildcard files including subfolders"""
+    """Get list of available wildcards using Impact Pack's wildcard system"""
     try:
-        if not WILDCARDS_DIR or not WILDCARDS_DIR.exists():
-            return ["Select the Wildcard to add to the text"]
+        if WILDCARDS_AVAILABLE and wildcards and hasattr(wildcards, 'get_wildcard_list'):
+            # Use Impact Pack's get_wildcard_list function
+            wildcard_list = wildcards.get_wildcard_list()
+            if wildcard_list:
+                return ["Select the Wildcard to add to the text"] + wildcard_list
 
-        wildcard_list = ["Select the Wildcard to add to the text"]
-
-        # Recursively get all .txt, .yaml, .yml files
-        for file in sorted(WILDCARDS_DIR.rglob("*.*")):
-            if file.suffix in [".txt", ".yaml", ".yml"]:
-                # Get relative path from wildcards dir
-                rel_path = file.relative_to(WILDCARDS_DIR)
-                # Convert to wildcard format: subfolder/color.txt -> __subfolder/color__
-                # Use forward slashes for wildcard format (even on Windows)
-                wildcard_name = f"__{rel_path.with_suffix('').as_posix()}__"
-                wildcard_list.append(wildcard_name)
-
-        return wildcard_list
+        return ["Select the Wildcard to add to the text"]
     except Exception as e:
         print(f"[ImpactWildcardProcessorSeed] Error loading wildcard list: {e}")
         return ["Select the Wildcard to add to the text"]
