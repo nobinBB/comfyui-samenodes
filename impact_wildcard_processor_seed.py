@@ -95,10 +95,19 @@ class ImpactWildcardProcessorSeed:
         }
 
     RETURN_TYPES = ("STRING",)
-    RETURN_NAMES = ("text",)
+    RETURN_NAMES = ("processed text",)
     FUNCTION = "process_wildcard"
-    CATEGORY = "ImpactPack/Wildcard"
+    CATEGORY = "ImpactPack/Prompt"
     OUTPUT_NODE = True
+
+    DESCRIPTION = (
+        "Extended ImpactWildcardProcessor with Seed Step N functionality.\n\n"
+        "Processes wildcard syntax with configurable seed behavior:\n"
+        "- random mode: New random seed every divisor steps\n"
+        "- increment mode: Increase seed every divisor steps\n"
+        "- decrement mode: Decrease seed every divisor steps\n\n"
+        "With divisor=4, the same wildcard result repeats 4 times before re-rolling."
+    )
 
     @classmethod
     def IS_CHANGED(cls, **kwargs):
@@ -143,12 +152,12 @@ class ImpactWildcardProcessorSeed:
         except Exception as e:
             print(f"[ImpactWildcardProcessorSeed] Error saving cache: {e}")
 
-    def calculate_seed(self, base_seed, divisor, increment_amount, seed_mode, unique_id):
+    def calculate_seed(self, seed, divisor, increment_amount, seed_mode, unique_id):
         """
-        Calculate seed based on mode and counter
+        Calculate seed based on mode and counter (Seed Step N extension)
 
         Args:
-            base_seed: Base seed value
+            seed: Base seed value (from Impact Pack's seed parameter)
             divisor: How many executions before changing seed
             increment_amount: Amount to increment/decrement seed
             seed_mode: "random", "increment", or "decrement"
@@ -173,18 +182,18 @@ class ImpactWildcardProcessorSeed:
             # Random mode: change seed every divisor steps
             # Same seed is used for divisor consecutive executions
             seed_step = count // divisor
-            random.seed(base_seed + seed_step)
-            seed = random.randint(0, 0xffffffffffffffff)
+            random.seed(seed + seed_step)
+            calculated_seed = random.randint(0, 0xffffffffffffffff)
         elif seed_mode == "increment":
             # Increment mode: increase seed every divisor steps
             seed_increment = (count // divisor) * increment_amount
-            seed = base_seed + seed_increment
+            calculated_seed = seed + seed_increment
         elif seed_mode == "decrement":
             # Decrement mode: decrease seed every divisor steps
             seed_decrement = (count // divisor) * increment_amount
-            seed = base_seed - seed_decrement
+            calculated_seed = seed - seed_decrement
         else:
-            seed = base_seed
+            calculated_seed = seed
 
         # Increment count
         counters[counter_key] = count + 1
@@ -192,7 +201,7 @@ class ImpactWildcardProcessorSeed:
         # Save counters
         self.save_counters(counters)
 
-        return seed
+        return calculated_seed
 
     def process_wildcard(self, wildcard_text, populated_text, mode, seed, seed_mode, divisor,
                         increment_amount, unique_id=None, **kwargs):
@@ -200,13 +209,13 @@ class ImpactWildcardProcessorSeed:
         Process wildcard text with seed management and result caching
 
         Args:
-            wildcard_text: Text containing wildcards
-            mode: "populate" or "fixed"
-            seed_mode: "random", "increment", or "decrement"
-            base_seed: Base seed value
-            divisor: How many executions before changing seed
-            increment_amount: Amount to increment/decrement
-            populated: Pre-populated text (for fixed mode)
+            wildcard_text: Text containing wildcards (input prompt)
+            populated_text: Processed result or fixed text
+            mode: "populate", "fixed", or "reproduce"
+            seed: Base seed value (Impact Pack parameter)
+            seed_mode: "random", "increment", or "decrement" (Seed Step N extension)
+            divisor: How many executions before changing seed (Seed Step N extension)
+            increment_amount: Amount to increment/decrement (Seed Step N extension)
             unique_id: Unique identifier for this node instance
 
         Returns:
@@ -221,7 +230,11 @@ class ImpactWildcardProcessorSeed:
         counters = self.load_counters()
         count = counters.get(counter_key, 0)
 
+<<<<<<< HEAD
         # Calculate seed based on mode
+=======
+        # Calculate seed based on Seed Step N mode
+>>>>>>> origin/main
         calculated_seed = self.calculate_seed(seed, divisor, increment_amount, seed_mode, unique_id)
 
         # Get updated count after calculate_seed
@@ -230,8 +243,13 @@ class ImpactWildcardProcessorSeed:
 
         # Process based on mode
         if mode == "fixed" or mode == "reproduce":
+<<<<<<< HEAD
             # Fixed/Reproduce mode: return populated_text as-is
             result = populated_text if populated_text else wildcard_text
+=======
+            # Fixed/Reproduce mode: use populated_text as-is
+            result = populated_text
+>>>>>>> origin/main
         else:
             # Populate mode: use caching system
             cache = self.load_cache()
@@ -242,7 +260,14 @@ class ImpactWildcardProcessorSeed:
 
             if should_process:
                 # Process wildcard and cache result
+<<<<<<< HEAD
                 text_to_process = populated_text if populated_text else wildcard_text
+=======
+                # Note: In Impact Pack, populated_text is used for processing
+                # UI automatically updates populated_text from wildcard_text in populate mode
+                text_to_process = populated_text if populated_text else wildcard_text
+
+>>>>>>> origin/main
                 if WILDCARDS_AVAILABLE and wildcards:
                     try:
                         # Use Impact Pack's wildcard processor
