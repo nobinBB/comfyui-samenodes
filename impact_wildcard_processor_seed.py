@@ -47,10 +47,12 @@ def get_wildcard_list():
 
     wildcard_list = ["Select the Wildcard to add to the text"]
     try:
-        for file in sorted(WILDCARDS_DIR.glob("*.txt")):
-            # Convert filename to wildcard format: color.txt -> __color__
-            wildcard_name = f"__{file.stem}__"
-            wildcard_list.append(wildcard_name)
+        # Get both .txt and .yaml files
+        for file in sorted(WILDCARDS_DIR.glob("*.*")):
+            if file.suffix in [".txt", ".yaml", ".yml"]:
+                # Convert filename to wildcard format: color.txt -> __color__
+                wildcard_name = f"__{file.stem}__"
+                wildcard_list.append(wildcard_name)
     except Exception as e:
         print(f"[ImpactWildcardProcessorSeed] Error loading wildcard list: {e}")
 
@@ -73,45 +75,19 @@ class ImpactWildcardProcessorSeed:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "wildcard_text": ("STRING", {
-                    "multiline": True,
-                    "default": "",
-                    "dynamicPrompts": False,
-                    "tooltip": "Enter a prompt using wildcard syntax."
-                }),
-                "populated_text": ("STRING", {
-                    "multiline": True,
-                    "default": "",
-                    "dynamicPrompts": False,
-                    "tooltip": "The processed result is displayed here. In populate mode, this is read-only. In fixed mode, you can edit this directly."
-                }),
-                "mode": (["populate", "fixed", "reproduce"], {
-                    "default": "populate",
-                    "tooltip": "populate: Process wildcard_text and update populated_text\nfixed: Use populated_text as-is\nreproduce: Fixed mode once, then switch to populate"
-                }),
-                "seed_mode": (["random", "increment", "decrement"], {
-                    "default": "random",
-                    "tooltip": "random: Random seed every divisor steps\nincrement: Increase seed every divisor steps\ndecrement: Decrease seed every divisor steps"
-                }),
-                "base_seed": ("INT", {
-                    "default": 0,
-                    "min": 0,
-                    "max": 0xffffffffffffffff,
-                    "tooltip": "Base seed value for wildcard processing."
-                }),
-                "divisor": ("INT", {
-                    "default": 1,
-                    "min": 1,
-                    "max": 1000,
-                    "tooltip": "Number of executions before changing seed."
-                }),
-                "increment_amount": ("INT", {
-                    "default": 1,
-                    "min": 1,
-                    "max": 10000,
-                    "tooltip": "Amount to increment/decrement seed (not used in random mode)."
-                }),
+                "wildcard_text": ("STRING", {"multiline": True, "dynamicPrompts": False, "tooltip": "Enter a prompt using wildcard syntax."}),
+                "populated_text": ("STRING", {"multiline": True, "dynamicPrompts": False, "tooltip": "The actual value passed during the execution of 'ImpactWildcardProcessor' is what is shown here. The behavior varies slightly depending on the mode. Wildcard syntax can also be used in 'populated_text'."}),
+                "mode": (["populate", "fixed", "reproduce"], {"default": "populate", "tooltip":
+                    "populate: Before running the workflow, it overwrites the existing value of 'populated_text' with the prompt processed from 'wildcard_text'. In this mode, 'populated_text' cannot be edited.\n"
+                    "fixed: Ignores wildcard_text and keeps 'populated_text' as is. You can edit 'populated_text' in this mode.\n"
+                    "reproduce: This mode operates as 'fixed' mode only once for reproduction, and then it switches to 'populate' mode."
+                    }),
+                "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff, "tooltip": "Determines the random seed to be used for wildcard processing."}),
                 "Select to add Wildcard": (get_wildcard_list(),),
+                # Seed Step N extensions below
+                "seed_mode": (["random", "increment", "decrement"], {"default": "random"}),
+                "divisor": ("INT", {"default": 1, "min": 1, "max": 1000}),
+                "increment_amount": ("INT", {"default": 1, "min": 1, "max": 10000}),
             },
             "hidden": {
                 "unique_id": "UNIQUE_ID"
@@ -176,12 +152,12 @@ class ImpactWildcardProcessorSeed:
         except Exception as e:
             print(f"[ImpactWildcardProcessorSeed] Error saving cache: {e}")
 
-    def calculate_seed(self, base_seed, divisor, increment_amount, seed_mode, unique_id):
+    def calculate_seed(self, seed, divisor, increment_amount, seed_mode, unique_id):
         """
-        Calculate seed based on mode and counter
+        Calculate seed based on mode and counter (Seed Step N extension)
 
         Args:
-            base_seed: Base seed value
+            seed: Base seed value (from Impact Pack's seed parameter)
             divisor: How many executions before changing seed
             increment_amount: Amount to increment/decrement seed
             seed_mode: "random", "increment", or "decrement"
@@ -206,18 +182,18 @@ class ImpactWildcardProcessorSeed:
             # Random mode: change seed every divisor steps
             # Same seed is used for divisor consecutive executions
             seed_step = count // divisor
-            random.seed(base_seed + seed_step)
-            seed = random.randint(0, 0xffffffffffffffff)
+            random.seed(seed + seed_step)
+            calculated_seed = random.randint(0, 0xffffffffffffffff)
         elif seed_mode == "increment":
             # Increment mode: increase seed every divisor steps
             seed_increment = (count // divisor) * increment_amount
-            seed = base_seed + seed_increment
+            calculated_seed = seed + seed_increment
         elif seed_mode == "decrement":
             # Decrement mode: decrease seed every divisor steps
             seed_decrement = (count // divisor) * increment_amount
-            seed = base_seed - seed_decrement
+            calculated_seed = seed - seed_decrement
         else:
-            seed = base_seed
+            calculated_seed = seed
 
         # Increment count
         counters[counter_key] = count + 1
@@ -225,9 +201,9 @@ class ImpactWildcardProcessorSeed:
         # Save counters
         self.save_counters(counters)
 
-        return seed
+        return calculated_seed
 
-    def process_wildcard(self, wildcard_text, populated_text, mode, seed_mode, base_seed, divisor,
+    def process_wildcard(self, wildcard_text, populated_text, mode, seed, seed_mode, divisor,
                         increment_amount, unique_id=None, **kwargs):
         """
         Process wildcard text with seed management and result caching
@@ -236,10 +212,10 @@ class ImpactWildcardProcessorSeed:
             wildcard_text: Text containing wildcards (input prompt)
             populated_text: Processed result or fixed text
             mode: "populate", "fixed", or "reproduce"
-            seed_mode: "random", "increment", or "decrement"
-            base_seed: Base seed value
-            divisor: How many executions before changing seed
-            increment_amount: Amount to increment/decrement
+            seed: Base seed value (Impact Pack parameter)
+            seed_mode: "random", "increment", or "decrement" (Seed Step N extension)
+            divisor: How many executions before changing seed (Seed Step N extension)
+            increment_amount: Amount to increment/decrement (Seed Step N extension)
             unique_id: Unique identifier for this node instance
 
         Returns:
@@ -254,8 +230,8 @@ class ImpactWildcardProcessorSeed:
         counters = self.load_counters()
         count = counters.get(counter_key, 0)
 
-        # Calculate seed based on mode
-        seed = self.calculate_seed(base_seed, divisor, increment_amount, seed_mode, unique_id)
+        # Calculate seed based on Seed Step N mode
+        calculated_seed = self.calculate_seed(seed, divisor, increment_amount, seed_mode, unique_id)
 
         # Get updated count after calculate_seed
         counters = self.load_counters()
@@ -282,13 +258,13 @@ class ImpactWildcardProcessorSeed:
                 if WILDCARDS_AVAILABLE and wildcards:
                     try:
                         # Use Impact Pack's wildcard processor
-                        result = wildcards.process(text_to_process, seed)
+                        result = wildcards.process(text_to_process, calculated_seed)
                     except Exception as e:
                         print(f"[ImpactWildcardProcessorSeed] Error processing wildcards: {e}")
                         result = text_to_process
                 else:
                     # Fallback: simple wildcard processing
-                    result = self.simple_wildcard_process(text_to_process, seed)
+                    result = self.simple_wildcard_process(text_to_process, calculated_seed)
 
                 # Cache the result
                 cache[cache_key] = result
@@ -301,15 +277,15 @@ class ImpactWildcardProcessorSeed:
                     # No cache available, process anyway
                     text_to_process = populated_text if populated_text else wildcard_text
                     if WILDCARDS_AVAILABLE and wildcards:
-                        result = wildcards.process(text_to_process, seed)
+                        result = wildcards.process(text_to_process, calculated_seed)
                     else:
-                        result = self.simple_wildcard_process(text_to_process, seed)
+                        result = self.simple_wildcard_process(text_to_process, calculated_seed)
                     cache[cache_key] = result
                     self.save_cache(cache)
 
         return {
             "ui": {
-                "seed": [seed],
+                "seed": [calculated_seed],
                 "count": [new_count]
             },
             "result": (result,)
