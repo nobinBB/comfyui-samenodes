@@ -27,12 +27,34 @@ try:
         # Import wildcards module
         import impact.wildcards as wildcards
         WILDCARDS_AVAILABLE = True
+
+        # Get wildcards directory
+        WILDCARDS_DIR = impact_pack_dir / "wildcards"
     else:
         WILDCARDS_AVAILABLE = False
         wildcards = None
+        WILDCARDS_DIR = None
 except ImportError:
     WILDCARDS_AVAILABLE = False
     wildcards = None
+    WILDCARDS_DIR = None
+
+
+def get_wildcard_list():
+    """Get list of available wildcard files"""
+    if not WILDCARDS_DIR or not WILDCARDS_DIR.exists():
+        return ["Select the Wildcard to add to the text"]
+
+    wildcard_list = ["Select the Wildcard to add to the text"]
+    try:
+        for file in sorted(WILDCARDS_DIR.glob("*.txt")):
+            # Convert filename to wildcard format: color.txt -> __color__
+            wildcard_name = f"__{file.stem}__"
+            wildcard_list.append(wildcard_name)
+    except Exception as e:
+        print(f"[ImpactWildcardProcessorSeed] Error loading wildcard list: {e}")
+
+    return wildcard_list
 
 
 class ImpactWildcardProcessorSeed:
@@ -89,7 +111,7 @@ class ImpactWildcardProcessorSeed:
                     "max": 10000,
                     "tooltip": "Amount to increment/decrement seed (not used in random mode)."
                 }),
-                "Select to add Wildcard": (["Select the Wildcard to add to the text"],),
+                "Select to add Wildcard": (get_wildcard_list(),),
             },
             "hidden": {
                 "unique_id": "UNIQUE_ID"
