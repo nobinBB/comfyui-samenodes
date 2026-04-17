@@ -107,3 +107,30 @@ __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS"]
 
 # Register custom API routes
 WEB_DIRECTORY = "./web"
+
+# Setup custom API endpoints
+try:
+    from server import PromptServer
+    from aiohttp import web
+    from .seed_step_n import SeedStepN
+
+    @PromptServer.instance.routes.post("/samenodes/reset_seed_counter")
+    async def reset_seed_counter(request):
+        """API endpoint to reset seed counter for a specific node instance"""
+        try:
+            data = await request.json()
+            unique_id = data.get("unique_id")
+
+            if unique_id is None:
+                return web.json_response({"success": False, "error": "unique_id is required"}, status=400)
+
+            # Call reset_counter method
+            success = SeedStepN.reset_counter(unique_id)
+
+            return web.json_response({"success": success})
+        except Exception as e:
+            print(f"Error in reset_seed_counter API: {e}")
+            return web.json_response({"success": False, "error": str(e)}, status=500)
+
+except ImportError:
+    print("Warning: Could not register custom API routes (server module not available)")
