@@ -52,7 +52,8 @@ def get_wildcard_list():
                 # Get relative path from wildcards dir
                 rel_path = file.relative_to(WILDCARDS_DIR)
                 # Convert to wildcard format: subfolder/color.txt -> __subfolder/color__
-                wildcard_name = f"__{rel_path.with_suffix('')}__"
+                # Use forward slashes for wildcard format (even on Windows)
+                wildcard_name = f"__{rel_path.with_suffix('').as_posix()}__"
                 wildcard_list.append(wildcard_name)
 
         return wildcard_list
@@ -85,7 +86,7 @@ class ImpactWildcardProcessorSeed:
                     "reproduce: This mode operates as 'fixed' mode only once for reproduction, and then it switches to 'populate' mode."
                     }),
                 "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff, "tooltip": "Determines the random seed to be used for wildcard processing."}),
-                "Select to add Wildcard": (get_wildcard_list(),),
+                "Select to add Wildcard": (get_wildcard_list(), {"default": "Select the Wildcard to add to the text"}),
                 # Seed Step N extensions
                 "seed_mode": (["random", "increment", "decrement"], {"default": "random"}),
                 "divisor": ("INT", {"default": 1, "min": 1, "max": 1000}),

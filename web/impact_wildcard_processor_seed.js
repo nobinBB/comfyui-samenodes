@@ -83,11 +83,11 @@ app.registerExtension({
         // Function to update seed display based on current parameters
         const updateSeedDisplay = () => {
             const seedModeWidget = node.widgets.find(w => w.name === "seed_mode");
-            const baseSeedWidget = node.widgets.find(w => w.name === "base_seed");
+            const seedWidget_input = node.widgets.find(w => w.name === "seed");
 
-            if (seedModeWidget && baseSeedWidget) {
+            if (seedModeWidget && seedWidget_input) {
                 const seedMode = seedModeWidget.value || "random";
-                const baseSeed = baseSeedWidget.value || 0;
+                const seed = seedWidget_input.value || 0;
 
                 // Parse current count from display
                 const countMatch = countWidget.value.match(/Count: (\d+)/);
@@ -96,7 +96,7 @@ app.registerExtension({
                 // Show seed mode info
                 let seedInfo = `Seed mode: ${seedMode}`;
                 if (seedMode !== "random") {
-                    seedInfo += ` (base: ${baseSeed})`;
+                    seedInfo += ` (seed: ${seed})`;
                 }
                 seedWidget.value = seedInfo;
             }
@@ -104,7 +104,7 @@ app.registerExtension({
 
         // Update seed display when parameters change
         const seedModeWidget = node.widgets.find(w => w.name === "seed_mode");
-        const baseSeedWidget = node.widgets.find(w => w.name === "base_seed");
+        const seedWidget_input = node.widgets.find(w => w.name === "seed");
         const divisorWidget = node.widgets.find(w => w.name === "divisor");
         const incrementWidget = node.widgets.find(w => w.name === "increment_amount");
 
@@ -116,9 +116,9 @@ app.registerExtension({
             };
         }
 
-        if (baseSeedWidget) {
-            const originalCallback = baseSeedWidget.callback;
-            baseSeedWidget.callback = function(value) {
+        if (seedWidget_input) {
+            const originalCallback = seedWidget_input.callback;
+            seedWidget_input.callback = function(value) {
                 if (originalCallback) originalCallback.call(this, value);
                 updateSeedDisplay();
             };
