@@ -86,11 +86,13 @@ class ImpactWildcardProcessorSeed:
                     "reproduce: This mode operates as 'fixed' mode only once for reproduction, and then it switches to 'populate' mode."
                     }),
                 "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff, "tooltip": "Determines the random seed to be used for wildcard processing."}),
-                "Select to add Wildcard": (get_wildcard_list(), {"default": "Select the Wildcard to add to the text"}),
                 # Seed Step N extensions
                 "seed_mode": (["random", "increment", "decrement"], {"default": "random"}),
                 "divisor": ("INT", {"default": 1, "min": 1, "max": 1000}),
                 "increment_amount": ("INT", {"default": 1, "min": 1, "max": 10000}),
+            },
+            "optional": {
+                "Select to add Wildcard": (get_wildcard_list(), {"default": "Select the Wildcard to add to the text"}),
             },
             "hidden": {
                 "unique_id": "UNIQUE_ID"
