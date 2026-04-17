@@ -78,9 +78,9 @@ class ImpactWildcardProcessorSeed:
                     }),
                 "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff, "tooltip": "Determines the random seed to be used for wildcard processing."}),
                 # Seed Step N extensions
-                "seed_mode": (["random", "increment", "decrement"], {"default": "random"}),
-                "divisor": ("INT", {"default": 1, "min": 1, "max": 1000}),
-                "increment_amount": ("INT", {"default": 1, "min": 1, "max": 10000}),
+                "seed_mode": (["random", "increment", "decrement"], {"default": "random", "tooltip": "Seed Step N: How seed changes every divisor steps. random=new random seed, increment=seed+increment_amount, decrement=seed-increment_amount"}),
+                "divisor": ("INT", {"default": 1, "min": 1, "max": 1000, "tooltip": "Seed Step N: Number of executions before seed changes. With divisor=4, same wildcard result repeats 4 times."}),
+                "increment_amount": ("INT", {"default": 1, "min": 1, "max": 10000, "tooltip": "Seed Step N: Amount to increment/decrement seed in increment/decrement mode."}),
             },
             "optional": {
                 "Select to add Wildcard": (get_wildcard_list(), {"default": "Select the Wildcard to add to the text"}),
@@ -233,10 +233,13 @@ class ImpactWildcardProcessorSeed:
         counters = self.load_counters()
         new_count = counters.get(counter_key, 0)
 
+        print(f"[ImpactWildcardProcessorSeed] Node {unique_id}: count={count}, new_count={new_count}, divisor={divisor}, seed_mode={seed_mode}")
+
         # Process based on mode
         if mode == "fixed" or mode == "reproduce":
             # Fixed/Reproduce mode: use populated_text as-is
             result = populated_text
+            print(f"[ImpactWildcardProcessorSeed] Node {unique_id}: mode={mode}, using populated_text as-is")
         else:
             # Populate mode: use caching system
             cache = self.load_cache()
@@ -244,6 +247,8 @@ class ImpactWildcardProcessorSeed:
 
             # Check if we should process wildcard (divisor boundary)
             should_process = (count % divisor) == 0
+
+            print(f"[ImpactWildcardProcessorSeed] Node {unique_id}: should_process={should_process} (count={count} % divisor={divisor} = {count % divisor})")
 
             if should_process:
                 # Process wildcard and cache result
@@ -255,20 +260,26 @@ class ImpactWildcardProcessorSeed:
                     try:
                         # Use Impact Pack's wildcard processor
                         result = wildcards.process(text_to_process, calculated_seed)
+                        print(f"[ImpactWildcardProcessorSeed] Node {unique_id}: PROCESSED wildcard with seed {calculated_seed}")
+                        print(f"[ImpactWildcardProcessorSeed] Node {unique_id}: Input: {text_to_process[:50]}...")
+                        print(f"[ImpactWildcardProcessorSeed] Node {unique_id}: Output: {result[:50]}...")
                     except Exception as e:
                         print(f"[ImpactWildcardProcessorSeed] Error processing wildcards: {e}")
                         result = text_to_process
                 else:
                     # Fallback: simple wildcard processing
                     result = self.simple_wildcard_process(text_to_process, calculated_seed)
+                    print(f"[ImpactWildcardProcessorSeed] Node {unique_id}: PROCESSED wildcard (fallback) with seed {calculated_seed}")
 
                 # Cache the result
                 cache[cache_key] = result
                 self.save_cache(cache)
+                print(f"[ImpactWildcardProcessorSeed] Node {unique_id}: Cached result")
             else:
                 # Use cached result
                 if cache_key in cache:
                     result = cache[cache_key]
+                    print(f"[ImpactWildcardProcessorSeed] Node {unique_id}: Using CACHED result: {result[:50]}...")
                 else:
                     # No cache available, process anyway
                     text_to_process = populated_text if populated_text else wildcard_text
