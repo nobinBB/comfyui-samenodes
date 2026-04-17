@@ -78,9 +78,9 @@ class ImpactWildcardProcessorSeed:
                     }),
                 "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff, "tooltip": "Determines the random seed to be used for wildcard processing."}),
                 # Seed Step N extensions
-                "seed_mode": (["random", "increment", "decrement"], {"default": "random"}),
-                "divisor": ("INT", {"default": 1, "min": 1, "max": 1000}),
-                "increment_amount": ("INT", {"default": 1, "min": 1, "max": 10000}),
+                "seed_mode": (["random", "increment", "decrement"], {"default": "random", "tooltip": "Seed Step N: How seed changes every divisor steps. random=new random seed, increment=seed+increment_amount, decrement=seed-increment_amount"}),
+                "divisor": ("INT", {"default": 1, "min": 1, "max": 1000, "tooltip": "Seed Step N: Number of executions before seed changes. With divisor=4, same wildcard result repeats 4 times."}),
+                "increment_amount": ("INT", {"default": 1, "min": 1, "max": 10000, "tooltip": "Seed Step N: Amount to increment/decrement seed in increment/decrement mode."}),
             },
             "optional": {
                 "Select to add Wildcard": (get_wildcard_list(), {"default": "Select the Wildcard to add to the text"}),
