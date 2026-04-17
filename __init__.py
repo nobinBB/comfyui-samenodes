@@ -59,6 +59,9 @@ from .seed_step_n import NODE_DISPLAY_NAME_MAPPINGS as SEED_STEP_DISPLAY_MAPPING
 from .sd_prompt_saver_optimized import NODE_CLASS_MAPPINGS as SD_PROMPT_MAPPINGS
 from .sd_prompt_saver_optimized import NODE_DISPLAY_NAME_MAPPINGS as SD_PROMPT_DISPLAY_MAPPINGS
 
+from .impact_wildcard_processor_seed import NODE_CLASS_MAPPINGS as WILDCARD_SEED_MAPPINGS
+from .impact_wildcard_processor_seed import NODE_DISPLAY_NAME_MAPPINGS as WILDCARD_SEED_DISPLAY_MAPPINGS
+
 NODE_CLASS_MAPPINGS = {
     **FLOAT_MAPPINGS,
     **BATCH_MAPPINGS,
@@ -79,6 +82,7 @@ NODE_CLASS_MAPPINGS = {
     **FORMAT_CONVERTER_MAPPINGS,
     **SEED_STEP_MAPPINGS,
     **SD_PROMPT_MAPPINGS,
+    **WILDCARD_SEED_MAPPINGS,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -101,6 +105,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     **FORMAT_CONVERTER_DISPLAY_MAPPINGS,
     **SEED_STEP_DISPLAY_MAPPINGS,
     **SD_PROMPT_DISPLAY_MAPPINGS,
+    **WILDCARD_SEED_DISPLAY_MAPPINGS,
 }
 
 __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS"]
@@ -113,6 +118,7 @@ try:
     from server import PromptServer
     from aiohttp import web
     from .seed_step_n import SeedStepN
+    from .impact_wildcard_processor_seed import ImpactWildcardProcessorSeed
 
     @PromptServer.instance.routes.post("/samenodes/reset_seed_counter")
     async def reset_seed_counter(request):
@@ -130,6 +136,24 @@ try:
             return web.json_response({"success": success})
         except Exception as e:
             print(f"Error in reset_seed_counter API: {e}")
+            return web.json_response({"success": False, "error": str(e)}, status=500)
+
+    @PromptServer.instance.routes.post("/samenodes/reset_wildcard_seed_counter")
+    async def reset_wildcard_seed_counter(request):
+        """API endpoint to reset wildcard seed counter for a specific node instance"""
+        try:
+            data = await request.json()
+            unique_id = data.get("unique_id")
+
+            if unique_id is None:
+                return web.json_response({"success": False, "error": "unique_id is required"}, status=400)
+
+            # Call reset_counter method
+            success = ImpactWildcardProcessorSeed.reset_counter(unique_id)
+
+            return web.json_response({"success": success})
+        except Exception as e:
+            print(f"Error in reset_wildcard_seed_counter API: {e}")
             return web.json_response({"success": False, "error": str(e)}, status=500)
 
 except ImportError:
