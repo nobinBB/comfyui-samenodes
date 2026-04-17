@@ -140,8 +140,10 @@ class ImpactWildcardProcessorSeed:
 
         # Calculate seed based on mode
         if seed_mode == "random":
-            # Random mode: use base_seed + count as random seed
-            random.seed(base_seed + count)
+            # Random mode: change seed every divisor steps
+            # Same seed is used for divisor consecutive executions
+            seed_step = count // divisor
+            random.seed(base_seed + seed_step)
             seed = random.randint(0, 0xffffffffffffffff)
         elif seed_mode == "increment":
             # Increment mode: increase seed every divisor steps
