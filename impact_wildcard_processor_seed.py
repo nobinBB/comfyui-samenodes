@@ -232,8 +232,11 @@ class ImpactWildcardProcessorSeed:
 
 <<<<<<< HEAD
         # Calculate seed based on mode
+<<<<<<< HEAD
+=======
 =======
         # Calculate seed based on Seed Step N mode
+>>>>>>> origin/main
 >>>>>>> origin/main
         calculated_seed = self.calculate_seed(seed, divisor, increment_amount, seed_mode, unique_id)
 
@@ -247,8 +250,13 @@ class ImpactWildcardProcessorSeed:
             # Fixed/Reproduce mode: return populated_text as-is
             result = populated_text if populated_text else wildcard_text
 =======
+<<<<<<< HEAD
+            # Fixed/Reproduce mode: return populated_text as-is
+            result = populated_text if populated_text else wildcard_text
+=======
             # Fixed/Reproduce mode: use populated_text as-is
             result = populated_text
+>>>>>>> origin/main
 >>>>>>> origin/main
         else:
             # Populate mode: use caching system
@@ -263,10 +271,14 @@ class ImpactWildcardProcessorSeed:
 <<<<<<< HEAD
                 text_to_process = populated_text if populated_text else wildcard_text
 =======
+<<<<<<< HEAD
+                text_to_process = populated_text if populated_text else wildcard_text
+=======
                 # Note: In Impact Pack, populated_text is used for processing
                 # UI automatically updates populated_text from wildcard_text in populate mode
                 text_to_process = populated_text if populated_text else wildcard_text
 
+>>>>>>> origin/main
 >>>>>>> origin/main
                 if WILDCARDS_AVAILABLE and wildcards:
                     try:
