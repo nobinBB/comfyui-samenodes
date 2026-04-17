@@ -27,12 +27,36 @@ try:
         # Import wildcards module
         import impact.wildcards as wildcards
         WILDCARDS_AVAILABLE = True
+        WILDCARDS_DIR = impact_pack_dir / "wildcards"
     else:
         WILDCARDS_AVAILABLE = False
         wildcards = None
+        WILDCARDS_DIR = None
 except ImportError:
     WILDCARDS_AVAILABLE = False
     wildcards = None
+    WILDCARDS_DIR = None
+
+
+def get_wildcard_list():
+    """Get list of available wildcard files including subfolders"""
+    if not WILDCARDS_DIR or not WILDCARDS_DIR.exists():
+        return ["Select the Wildcard to add to the text"]
+
+    wildcard_list = ["Select the Wildcard to add to the text"]
+    try:
+        # Recursively get all .txt, .yaml, .yml files
+        for file in sorted(WILDCARDS_DIR.rglob("*.*")):
+            if file.suffix in [".txt", ".yaml", ".yml"]:
+                # Get relative path from wildcards dir
+                rel_path = file.relative_to(WILDCARDS_DIR)
+                # Convert to wildcard format: subfolder/color.txt -> __subfolder/color__
+                wildcard_name = f"__{rel_path.with_suffix('')}__"
+                wildcard_list.append(wildcard_name)
+    except Exception as e:
+        print(f"[ImpactWildcardProcessorSeed] Error loading wildcard list: {e}")
+
+    return wildcard_list
 
 
 class ImpactWildcardProcessorSeed:
@@ -51,35 +75,18 @@ class ImpactWildcardProcessorSeed:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "wildcard_text": ("STRING", {
-                    "multiline": True,
-                    "default": "",
-                    "dynamicPrompts": True
-                }),
-                "mode": (["populate", "fixed"],),
-                "seed_mode": (["random", "increment", "decrement"],),
-                "base_seed": ("INT", {
-                    "default": 0,
-                    "min": 0,
-                    "max": 0xffffffffffffffff
-                }),
-                "divisor": ("INT", {
-                    "default": 1,
-                    "min": 1,
-                    "max": 1000
-                }),
-                "increment_amount": ("INT", {
-                    "default": 1,
-                    "min": 1,
-                    "max": 10000
-                }),
-            },
-            "optional": {
-                "populated": ("STRING", {
-                    "multiline": True,
-                    "default": "",
-                    "forceInput": False
-                }),
+                "wildcard_text": ("STRING", {"multiline": True, "dynamicPrompts": False, "tooltip": "Enter a prompt using wildcard syntax."}),
+                "populated_text": ("STRING", {"multiline": True, "dynamicPrompts": False, "tooltip": "The actual value passed during the execution of 'ImpactWildcardProcessor' is what is shown here. The behavior varies slightly depending on the mode. Wildcard syntax can also be used in 'populated_text'."}),
+                "mode": (["populate", "fixed", "reproduce"], {"default": "populate", "tooltip":
+                    "populate: Before running the workflow, it overwrites the existing value of 'populated_text' with the prompt processed from 'wildcard_text'. In this mode, 'populated_text' cannot be edited.\n"
+                    "fixed: Ignores wildcard_text and keeps 'populated_text' as is. You can edit 'populated_text' in this mode.\n"
+                    "reproduce: This mode operates as 'fixed' mode only once for reproduction, and then it switches to 'populate' mode."
+                    }),
+                "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff, "tooltip": "Determines the random seed to be used for wildcard processing."}),
+                "Select to add Wildcard": (get_wildcard_list(),),
+                "seed_mode": (["random", "increment", "decrement"], {"default": "random"}),
+                "divisor": ("INT", {"default": 1, "min": 1, "max": 1000}),
+                "increment_amount": ("INT", {"default": 1, "min": 1, "max": 10000}),
             },
             "hidden": {
                 "unique_id": "UNIQUE_ID"
@@ -186,8 +193,8 @@ class ImpactWildcardProcessorSeed:
 
         return seed
 
-    def process_wildcard(self, wildcard_text, mode, seed_mode, base_seed, divisor,
-                        increment_amount, populated="", unique_id=None):
+    def process_wildcard(self, wildcard_text, populated_text, mode, seed, seed_mode, divisor,
+                        increment_amount, unique_id=None, **kwargs):
         """
         Process wildcard text with seed management and result caching
 
@@ -214,16 +221,16 @@ class ImpactWildcardProcessorSeed:
         count = counters.get(counter_key, 0)
 
         # Calculate seed based on mode
-        seed = self.calculate_seed(base_seed, divisor, increment_amount, seed_mode, unique_id)
+        calculated_seed = self.calculate_seed(seed, divisor, increment_amount, seed_mode, unique_id)
 
         # Get updated count after calculate_seed
         counters = self.load_counters()
         new_count = counters.get(counter_key, 0)
 
         # Process based on mode
-        if mode == "fixed":
-            # Fixed mode: return populated text as-is
-            result = populated if populated else wildcard_text
+        if mode == "fixed" or mode == "reproduce":
+            # Fixed/Reproduce mode: return populated_text as-is
+            result = populated_text if populated_text else wildcard_text
         else:
             # Populate mode: use caching system
             cache = self.load_cache()
@@ -234,16 +241,17 @@ class ImpactWildcardProcessorSeed:
 
             if should_process:
                 # Process wildcard and cache result
+                text_to_process = populated_text if populated_text else wildcard_text
                 if WILDCARDS_AVAILABLE and wildcards:
                     try:
                         # Use Impact Pack's wildcard processor
-                        result = wildcards.process(wildcard_text, seed)
+                        result = wildcards.process(text_to_process, calculated_seed)
                     except Exception as e:
                         print(f"[ImpactWildcardProcessorSeed] Error processing wildcards: {e}")
-                        result = wildcard_text
+                        result = text_to_process
                 else:
                     # Fallback: simple wildcard processing
-                    result = self.simple_wildcard_process(wildcard_text, seed)
+                    result = self.simple_wildcard_process(text_to_process, calculated_seed)
 
                 # Cache the result
                 cache[cache_key] = result
@@ -254,16 +262,17 @@ class ImpactWildcardProcessorSeed:
                     result = cache[cache_key]
                 else:
                     # No cache available, process anyway
+                    text_to_process = populated_text if populated_text else wildcard_text
                     if WILDCARDS_AVAILABLE and wildcards:
-                        result = wildcards.process(wildcard_text, seed)
+                        result = wildcards.process(text_to_process, calculated_seed)
                     else:
-                        result = self.simple_wildcard_process(wildcard_text, seed)
+                        result = self.simple_wildcard_process(text_to_process, calculated_seed)
                     cache[cache_key] = result
                     self.save_cache(cache)
 
         return {
             "ui": {
-                "seed": [seed],
+                "seed": [calculated_seed],
                 "count": [new_count]
             },
             "result": (result,)
