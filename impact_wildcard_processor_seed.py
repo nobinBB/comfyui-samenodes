@@ -27,8 +27,6 @@ try:
         # Import wildcards module
         import impact.wildcards as wildcards
         WILDCARDS_AVAILABLE = True
-
-        # Get wildcards directory
         WILDCARDS_DIR = impact_pack_dir / "wildcards"
     else:
         WILDCARDS_AVAILABLE = False
@@ -41,17 +39,19 @@ except ImportError:
 
 
 def get_wildcard_list():
-    """Get list of available wildcard files"""
+    """Get list of available wildcard files including subfolders"""
     if not WILDCARDS_DIR or not WILDCARDS_DIR.exists():
         return ["Select the Wildcard to add to the text"]
 
     wildcard_list = ["Select the Wildcard to add to the text"]
     try:
-        # Get both .txt and .yaml files
-        for file in sorted(WILDCARDS_DIR.glob("*.*")):
+        # Recursively get all .txt, .yaml, .yml files
+        for file in sorted(WILDCARDS_DIR.rglob("*.*")):
             if file.suffix in [".txt", ".yaml", ".yml"]:
-                # Convert filename to wildcard format: color.txt -> __color__
-                wildcard_name = f"__{file.stem}__"
+                # Get relative path from wildcards dir
+                rel_path = file.relative_to(WILDCARDS_DIR)
+                # Convert to wildcard format: subfolder/color.txt -> __subfolder/color__
+                wildcard_name = f"__{rel_path.with_suffix('')}__"
                 wildcard_list.append(wildcard_name)
     except Exception as e:
         print(f"[ImpactWildcardProcessorSeed] Error loading wildcard list: {e}")
@@ -84,7 +84,7 @@ class ImpactWildcardProcessorSeed:
                     }),
                 "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff, "tooltip": "Determines the random seed to be used for wildcard processing."}),
                 "Select to add Wildcard": (get_wildcard_list(),),
-                # Seed Step N extensions below
+                # Seed Step N extensions
                 "seed_mode": (["random", "increment", "decrement"], {"default": "random"}),
                 "divisor": ("INT", {"default": 1, "min": 1, "max": 1000}),
                 "increment_amount": ("INT", {"default": 1, "min": 1, "max": 10000}),
@@ -230,7 +230,11 @@ class ImpactWildcardProcessorSeed:
         counters = self.load_counters()
         count = counters.get(counter_key, 0)
 
+<<<<<<< HEAD
+        # Calculate seed based on mode
+=======
         # Calculate seed based on Seed Step N mode
+>>>>>>> origin/main
         calculated_seed = self.calculate_seed(seed, divisor, increment_amount, seed_mode, unique_id)
 
         # Get updated count after calculate_seed
@@ -239,8 +243,13 @@ class ImpactWildcardProcessorSeed:
 
         # Process based on mode
         if mode == "fixed" or mode == "reproduce":
+<<<<<<< HEAD
+            # Fixed/Reproduce mode: return populated_text as-is
+            result = populated_text if populated_text else wildcard_text
+=======
             # Fixed/Reproduce mode: use populated_text as-is
             result = populated_text
+>>>>>>> origin/main
         else:
             # Populate mode: use caching system
             cache = self.load_cache()
@@ -251,10 +260,14 @@ class ImpactWildcardProcessorSeed:
 
             if should_process:
                 # Process wildcard and cache result
+<<<<<<< HEAD
+                text_to_process = populated_text if populated_text else wildcard_text
+=======
                 # Note: In Impact Pack, populated_text is used for processing
                 # UI automatically updates populated_text from wildcard_text in populate mode
                 text_to_process = populated_text if populated_text else wildcard_text
 
+>>>>>>> origin/main
                 if WILDCARDS_AVAILABLE and wildcards:
                     try:
                         # Use Impact Pack's wildcard processor
