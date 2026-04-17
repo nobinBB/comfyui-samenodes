@@ -143,6 +143,29 @@ app.registerExtension({
         // Handle mode-based widget state
         const modeWidget = node.widgets.find(w => w.name === "mode");
         const populatedTextWidget = node.widgets.find(w => w.name === "populated_text");
+        const wildcardTextWidget = node.widgets.find(w => w.name === "wildcard_text");
+        const selectWildcardWidget = node.widgets.find(w => w.name === "Select to add Wildcard");
+
+        // Handle Select to add Wildcard dropdown (Impact Pack behavior)
+        if (selectWildcardWidget && wildcardTextWidget) {
+            const originalCallback = selectWildcardWidget.callback;
+            selectWildcardWidget.callback = function(value) {
+                if (originalCallback) originalCallback.call(this, value);
+
+                // If a wildcard is selected (not the default text), insert it into wildcard_text
+                if (value && value !== "Select the Wildcard to add to the text") {
+                    // Append the selected wildcard to wildcard_text
+                    const currentText = wildcardTextWidget.value || "";
+                    const separator = currentText.length > 0 ? ", " : "";
+                    wildcardTextWidget.value = currentText + separator + value;
+
+                    // Reset dropdown back to default
+                    selectWildcardWidget.value = "Select the Wildcard to add to the text";
+
+                    node.setDirtyCanvas(true);
+                }
+            };
+        }
 
         const updateWidgetStates = () => {
             if (modeWidget && populatedTextWidget) {
