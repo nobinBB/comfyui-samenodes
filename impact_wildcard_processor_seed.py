@@ -39,10 +39,13 @@ class ImpactWildcardProcessorSeed:
     """
     Extended ImpactWildcardProcessor with Seed Step N functionality.
     Supports random, increment, and decrement seed modes.
+    Uses result caching to ensure same output for divisor consecutive executions.
     """
 
     # Counter file path
     COUNTER_FILE = Path(__file__).parent / "wildcard_seed_counters.json"
+    # Cache file path for storing wildcard results
+    CACHE_FILE = Path(__file__).parent / "wildcard_seed_cache.json"
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -113,6 +116,25 @@ class ImpactWildcardProcessorSeed:
         except Exception as e:
             print(f"[ImpactWildcardProcessorSeed] Error saving counters: {e}")
 
+    def load_cache(self):
+        """Load cached results from JSON file"""
+        if self.CACHE_FILE.exists():
+            try:
+                with open(self.CACHE_FILE, 'r') as f:
+                    return json.load(f)
+            except Exception as e:
+                print(f"[ImpactWildcardProcessorSeed] Error loading cache: {e}")
+                return {}
+        return {}
+
+    def save_cache(self, cache):
+        """Save cached results to JSON file"""
+        try:
+            with open(self.CACHE_FILE, 'w') as f:
+                json.dump(cache, f, indent=2)
+        except Exception as e:
+            print(f"[ImpactWildcardProcessorSeed] Error saving cache: {e}")
+
     def calculate_seed(self, base_seed, divisor, increment_amount, seed_mode, unique_id):
         """
         Calculate seed based on mode and counter
@@ -180,7 +202,7 @@ class ImpactWildcardProcessorSeed:
     def process_wildcard(self, wildcard_text, mode, seed_mode, base_seed, divisor,
                         increment_amount, populated="", unique_id=None):
         """
-        Process wildcard text with seed management
+        Process wildcard text with seed management and result caching
 
         Args:
             wildcard_text: Text containing wildcards
@@ -195,30 +217,96 @@ class ImpactWildcardProcessorSeed:
         Returns:
             Tuple of (processed_text,)
         """
+        if unique_id is None:
+            unique_id = "default"
+
+        counter_key = str(unique_id)
+
+        # Get current count
+        counters = self.load_counters()
+        count = counters.get(counter_key, 0)
+
+        print(f"\n{'='*70}")
+        print(f"[ImpactWildcardProcessorSeed] Node ID: {unique_id}")
+        print(f"{'='*70}")
+        print(f"Mode: {mode}")
+        print(f"Seed mode: {seed_mode}")
+        print(f"Base seed: {base_seed}")
+        print(f"Divisor: {divisor}")
+        print(f"Increment amount: {increment_amount}")
+        print(f"Current count: {count}")
+        print(f"Wildcard text: {wildcard_text[:50]}..." if len(wildcard_text) > 50 else f"Wildcard text: {wildcard_text}")
+
         # Calculate seed based on mode
         seed = self.calculate_seed(base_seed, divisor, increment_amount, seed_mode, unique_id)
+
+        # Get updated count after calculate_seed
+        counters = self.load_counters()
+        new_count = counters.get(counter_key, 0)
 
         # Process based on mode
         if mode == "fixed":
             # Fixed mode: return populated text as-is
             result = populated if populated else wildcard_text
+            print(f"Fixed mode: returning populated text")
+            print(f"Result: {result[:100]}..." if len(result) > 100 else f"Result: {result}")
+            print(f"{'='*70}\n")
         else:
-            # Populate mode: process wildcards
-            if WILDCARDS_AVAILABLE and wildcards:
-                try:
-                    # Use Impact Pack's wildcard processor
-                    result = wildcards.process(wildcard_text, seed)
-                except Exception as e:
-                    print(f"[ImpactWildcardProcessorSeed] Error processing wildcards: {e}")
-                    result = wildcard_text
+            # Populate mode: use caching system
+            cache = self.load_cache()
+            cache_key = f"{counter_key}_result"
+
+            # Check if we should process wildcard (divisor boundary)
+            should_process = (count % divisor) == 0
+
+            print(f"Count position in divisor cycle: {count % divisor} / {divisor}")
+            print(f"Should process wildcard: {should_process}")
+
+            if should_process:
+                # Process wildcard and cache result
+                print(f"Processing wildcard with seed: {seed}")
+
+                if WILDCARDS_AVAILABLE and wildcards:
+                    try:
+                        # Use Impact Pack's wildcard processor
+                        print(f"Using Impact Pack wildcards.process()")
+                        result = wildcards.process(wildcard_text, seed)
+                        print(f"Impact Pack result: {result[:100]}..." if len(result) > 100 else f"Impact Pack result: {result}")
+                    except Exception as e:
+                        print(f"Error processing wildcards: {e}")
+                        result = wildcard_text
+                else:
+                    # Fallback: simple wildcard processing
+                    print(f"Impact Pack not available, using simple wildcard processing")
+                    result = self.simple_wildcard_process(wildcard_text, seed)
+                    print(f"Simple processing result: {result[:100]}..." if len(result) > 100 else f"Simple processing result: {result}")
+
+                # Cache the result
+                cache[cache_key] = result
+                self.save_cache(cache)
+                print(f"Result cached for next {divisor - 1} executions")
             else:
-                # Fallback: simple wildcard processing
-                result = self.simple_wildcard_process(wildcard_text, seed)
+                # Use cached result
+                if cache_key in cache:
+                    result = cache[cache_key]
+                    print(f"Using cached result: {result[:100]}..." if len(result) > 100 else f"Using cached result: {result}")
+                else:
+                    # No cache available, process anyway
+                    print(f"WARNING: No cached result found, processing wildcard")
+                    if WILDCARDS_AVAILABLE and wildcards:
+                        result = wildcards.process(wildcard_text, seed)
+                    else:
+                        result = self.simple_wildcard_process(wildcard_text, seed)
+                    cache[cache_key] = result
+                    self.save_cache(cache)
+
+            print(f"Final result: {result[:100]}..." if len(result) > 100 else f"Final result: {result}")
+            print(f"{'='*70}\n")
 
         return {
             "ui": {
                 "seed": [seed],
-                "count": [self.load_counters().get(str(unique_id) if unique_id else "default", 0)]
+                "count": [new_count]
             },
             "result": (result,)
         }
@@ -250,7 +338,7 @@ class ImpactWildcardProcessorSeed:
     @classmethod
     def reset_counter(cls, unique_id):
         """
-        Reset counter for specific node instance
+        Reset counter and clear cache for specific node instance
         This is called from frontend via API
         """
         counter_key = str(unique_id)
@@ -272,11 +360,35 @@ class ImpactWildcardProcessorSeed:
         try:
             with open(cls.COUNTER_FILE, 'w') as f:
                 json.dump(counters, f, indent=2)
-            print(f"[ImpactWildcardProcessorSeed] Counter reset for node {unique_id}")
-            return True
         except Exception as e:
             print(f"[ImpactWildcardProcessorSeed] Error resetting counter: {e}")
             return False
+
+        # Clear cache
+        if cls.CACHE_FILE.exists():
+            try:
+                with open(cls.CACHE_FILE, 'r') as f:
+                    cache = json.load(f)
+            except Exception:
+                cache = {}
+        else:
+            cache = {}
+
+        # Remove cached result for this node
+        cache_key = f"{counter_key}_result"
+        if cache_key in cache:
+            del cache[cache_key]
+
+        # Save cache
+        try:
+            with open(cls.CACHE_FILE, 'w') as f:
+                json.dump(cache, f, indent=2)
+        except Exception as e:
+            print(f"[ImpactWildcardProcessorSeed] Error clearing cache: {e}")
+            return False
+
+        print(f"[ImpactWildcardProcessorSeed] Counter and cache reset for node {unique_id}")
+        return True
 
 
 NODE_CLASS_MAPPINGS = {
