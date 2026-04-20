@@ -170,7 +170,51 @@ class SDPromptSaverOptimized:
     OUTPUT_NODE = True
 
     @staticmethod
+    def safe_replace_file(temp_path: Path, target_path: Path) -> bool:
+        """
+        Safely replace target file with temp file.
+        Returns True if successful, False otherwise.
+        Ensures original file is not lost even if replacement fails.
+        """
+        try:
+            # Verify temp file exists and has content
+            if not temp_path.exists() or temp_path.stat().st_size == 0:
+                return False
+
+            # Create backup of original if it exists
+            backup_path = None
+            if target_path.exists():
+                backup_path = target_path.with_suffix(target_path.suffix + ".backup")
+                import shutil
+                shutil.copy2(target_path, backup_path)
+
+            try:
+                # Attempt replacement
+                temp_path.replace(target_path)
+
+                # Success - remove backup if it exists
+                if backup_path and backup_path.exists():
+                    backup_path.unlink()
+                return True
+
+            except Exception as e:
+                # Replacement failed - restore from backup
+                if backup_path and backup_path.exists():
+                    backup_path.replace(target_path)
+                    backup_path.unlink(missing_ok=True)
+                print(f"[SDPromptSaverOptimized] File replacement failed: {e}")
+                return False
+
+        except Exception as e:
+            print(f"[SDPromptSaverOptimized] Safe replace error: {e}")
+            return False
+        finally:
+            # Clean up temp file if it still exists
+            temp_path.unlink(missing_ok=True)
+
+    @staticmethod
     def get_tool_path(tool_name):
+
         """
         Get tool path from local tools folder or system PATH.
         Priority: ./tools/{tool}.exe → system PATH
@@ -327,13 +371,16 @@ class SDPromptSaverOptimized:
             if result.returncode == 0 and tmp_path.exists():
                 tmp_size = tmp_path.stat().st_size
                 if tmp_size < current_size:  # Only replace if smaller
-                    tmp_path.replace(file_path)
-                    after_pngquant = tmp_size
-                    pngquant_used = True
-                    if show_log:
-                        reduction1 = (current_size - after_pngquant) / current_size * 100
-                        print(f"[SDPromptSaverOptimized] PNG (pngquant 85-95): {current_size:,} B → {after_pngquant:,} B (-{reduction1:.1f}%)")
-                    current_size = after_pngquant
+                    if self.safe_replace_file(tmp_path, file_path):
+                        after_pngquant = tmp_size
+                        pngquant_used = True
+                        if show_log:
+                            reduction1 = (current_size - after_pngquant) / current_size * 100
+                            print(f"[SDPromptSaverOptimized] PNG (pngquant 85-95): {current_size:,} B → {after_pngquant:,} B (-{reduction1:.1f}%)")
+                        current_size = after_pngquant
+                    else:
+                        if show_log:
+                            print(f"[SDPromptSaverOptimized] pngquant: file replacement failed, original preserved")
                 else:
                     tmp_path.unlink(missing_ok=True)
                     if show_log:
@@ -436,11 +483,14 @@ class SDPromptSaverOptimized:
             if result.returncode == 0 and tmp_path.exists():
                 tmp_size = tmp_path.stat().st_size
                 if tmp_size < original_size:
-                    tmp_path.replace(file_path)
-                    if show_log:
-                        reduction = (original_size - tmp_size) / original_size * 100
-                        print(f"[SDPromptSaverOptimized] WebP (cwebp): {original_size:,} B → {tmp_size:,} B (-{reduction:.1f}%)")
-                    return
+                    if self.safe_replace_file(tmp_path, file_path):
+                        if show_log:
+                            reduction = (original_size - tmp_size) / original_size * 100
+                            print(f"[SDPromptSaverOptimized] WebP (cwebp): {original_size:,} B → {tmp_size:,} B (-{reduction:.1f}%)")
+                        return
+                    else:
+                        if show_log:
+                            print(f"[SDPromptSaverOptimized] cwebp: file replacement failed, original preserved")
                 else:
                     tmp_path.unlink(missing_ok=True)
             else:
@@ -484,19 +534,23 @@ class SDPromptSaverOptimized:
             if result.returncode == 0 and tmp_path.exists():
                 tmp_size = tmp_path.stat().st_size
                 if tmp_size < original_size:
-                    tmp_path.replace(file_path)
-                    if show_log:
-                        reduction = (original_size - tmp_size) / original_size * 100
-                        print(f"[SDPromptSaverOptimized] JPEG (jpegtran): {original_size:,} B → {tmp_size:,} B (-{reduction:.1f}%)")
-                    return
+                    if self.safe_replace_file(tmp_path, file_path):
+                        if show_log:
+                            reduction = (original_size - tmp_size) / original_size * 100
+                            print(f"[SDPromptSaverOptimized] JPEG (jpegtran): {original_size:,} B → {tmp_size:,} B (-{reduction:.1f}%)")
+                        return
+                    else:
+                        if show_log:
+                            print(f"[SDPromptSaverOptimized] jpegtran: file replacement failed, original preserved")
                 else:
                     tmp_path.unlink(missing_ok=True)
             else:
                 tmp_path.unlink(missing_ok=True)
         except FileNotFoundError:
             pass  # jpegtran not found, fallback to Pillow
-        except Exception:
-            pass  # jpegtran failed, fallback to Pillow
+        except Exception as e:
+            if show_log:
+                print(f"[SDPromptSaverOptimized] jpegtran error: {e}")
 
         # Fallback: Pillow optimize
         try:
@@ -608,23 +662,35 @@ class SDPromptSaverOptimized:
                 file_path = output_folder / f"{file_name}.{save_suffix}"
 
             # Save with metadata
-            if save_suffix == "png":
-                self.save_png(img, file_path, metadata_text, prompt, extra_pnginfo)
-            elif save_suffix == "webp":
-                self.save_webp(img, file_path, metadata_text, prompt, extra_pnginfo)
-            else:  # jpg / jpeg
-                self.save_jpeg(img, file_path, metadata_text, prompt, extra_pnginfo,
-                              jpeg_quality)
+            try:
+                if save_suffix == "png":
+                    self.save_png(img, file_path, metadata_text, prompt, extra_pnginfo)
+                elif save_suffix == "webp":
+                    self.save_webp(img, file_path, metadata_text, prompt, extra_pnginfo)
+                else:  # jpg / jpeg
+                    self.save_jpeg(img, file_path, metadata_text, prompt, extra_pnginfo,
+                                  jpeg_quality)
 
-            print(f"[SDPromptSaverOptimized] saved: {file_path}")
+                # Verify file was saved
+                if not file_path.exists():
+                    print(f"[SDPromptSaverOptimized] ERROR: Failed to save {file_path}")
+                    continue
 
-            # Optimize (external tools + Pillow fallback)
-            if save_suffix == "png":
-                self.optimize_png(file_path, preserve_metadata, show_compression_log)
-            elif save_suffix == "webp":
-                self.optimize_webp(file_path, preserve_metadata, show_compression_log)
-            else:  # jpg / jpeg
-                self.optimize_jpeg(file_path, preserve_metadata, show_compression_log)
+                print(f"[SDPromptSaverOptimized] saved: {file_path}")
+
+                # Optimize (external tools + Pillow fallback)
+                if save_suffix == "png":
+                    self.optimize_png(file_path, preserve_metadata, show_compression_log)
+                elif save_suffix == "webp":
+                    self.optimize_webp(file_path, preserve_metadata, show_compression_log)
+                else:  # jpg / jpeg
+                    self.optimize_jpeg(file_path, preserve_metadata, show_compression_log)
+
+            except Exception as e:
+                print(f"[SDPromptSaverOptimized] ERROR saving image: {e}")
+                import traceback
+                traceback.print_exc()
+                continue
 
             # Optional .txt metadata file
             if save_metadata_file:
