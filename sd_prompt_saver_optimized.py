@@ -36,6 +36,21 @@ except ImportError:
 
 SUPPORTED_EXTENSIONS = ["png", "webp", "jpg", "jpeg"]
 
+# Try to import ComfyUI samplers/schedulers, fallback to static lists
+try:
+    import comfy.samplers
+    SAMPLERS = ["None"] + comfy.samplers.KSampler.SAMPLERS
+    SCHEDULERS = ["None"] + comfy.samplers.KSampler.SCHEDULERS
+except:
+    # Fallback to common sampler/scheduler names
+    SAMPLERS = ["None", "euler", "euler_cfg_pp", "euler_ancestral", "euler_ancestral_cfg_pp",
+                "heun", "heunpp2", "dpm_2", "dpm_2_ancestral", "lms", "dpm_fast", "dpm_adaptive",
+                "dpmpp_2s_ancestral", "dpmpp_2s_ancestral_cfg_pp", "dpmpp_sde", "dpmpp_sde_gpu",
+                "dpmpp_2m", "dpmpp_2m_cfg_pp", "dpmpp_2m_sde", "dpmpp_2m_sde_gpu",
+                "dpmpp_3m_sde", "dpmpp_3m_sde_gpu", "ddpm", "lcm", "ddim", "uni_pc", "uni_pc_bh2"]
+    SCHEDULERS = ["None", "normal", "karras", "exponential", "sgm_uniform", "simple", "ddim_uniform",
+                  "beta", "linear_quadratic"]
+
 
 class SDPromptSaverOptimized:
     """
@@ -75,13 +90,11 @@ class SDPromptSaverOptimized:
                 }),
 
                 # Model and generation parameters
-                "model_name": ("STRING", {
-                    "default": "",
-                    "multiline": False
+                "model_name": (["None"] + folder_paths.get_filename_list("checkpoints"), {
+                    "default": "None"
                 }),
-                "vae_name": ("STRING", {
-                    "default": "",
-                    "multiline": False
+                "vae_name": (["None"] + folder_paths.get_filename_list("vae"), {
+                    "default": "None"
                 }),
                 "seed": ("INT", {
                     "default": 0,
@@ -99,13 +112,11 @@ class SDPromptSaverOptimized:
                     "max": 100.0,
                     "step": 0.1
                 }),
-                "sampler_name": ("STRING", {
-                    "default": "",
-                    "multiline": False
+                "sampler_name": (SAMPLERS, {
+                    "default": "None"
                 }),
-                "scheduler": ("STRING", {
-                    "default": "",
-                    "multiline": False
+                "scheduler": (SCHEDULERS, {
+                    "default": "None"
                 }),
                 "width": ("INT", {
                     "default": 512,
@@ -587,6 +598,16 @@ class SDPromptSaverOptimized:
         # Normalize jpg/jpeg to one suffix for saving
         save_suffix = "jpg" if ext == "jpeg" else ext
 
+        # Handle "None" selections from dropdown
+        if model_name == "None":
+            model_name = ""
+        if vae_name == "None":
+            vae_name = ""
+        if sampler_name == "None":
+            sampler_name = ""
+        if scheduler == "None":
+            scheduler = ""
+
         variable_map = {
             "%date":      self.get_time(date_format),
             "%time":      self.get_time(time_format),
@@ -609,7 +630,7 @@ class SDPromptSaverOptimized:
         model_hash = ""
         if calculate_hash and model_name:
             for mp in folder_paths.get_filename_list("checkpoints"):
-                if Path(mp).name == model_name:
+                if Path(mp).name == model_name or mp == model_name:
                     full = folder_paths.get_full_path("checkpoints", mp)
                     model_hash = self.calculate_model_hash(full) or ""
                     break
