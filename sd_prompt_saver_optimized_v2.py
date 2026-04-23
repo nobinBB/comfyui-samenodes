@@ -324,68 +324,116 @@ class SDPromptSaverWithCompression:
         }
 
     # NEW: Compression optimization methods
+    def get_tool_path(self, tool_name: str) -> str:
+        """Get path to compression tool (check tools folder first, then system PATH)"""
+        # Check tools folder first
+        tools_dir = Path(__file__).parent / "tools"
+        tool_path = tools_dir / tool_name
+
+        # Windows: add .exe extension
+        if os.name == 'nt' and not tool_name.endswith('.exe'):
+            tool_path = tools_dir / f"{tool_name}.exe"
+
+        if tool_path.exists() and os.access(tool_path, os.X_OK):
+            return str(tool_path)
+
+        # Fallback to system PATH
+        return tool_name
+
     def optimize_image(self, file_path: Path, extension: str, show_log: bool):
         """Apply compression optimization to saved image"""
         try:
+            original_size = os.path.getsize(file_path)
+
             if extension == "png":
-                self.optimize_png(file_path, show_log)
+                self.optimize_png(file_path, show_log, original_size)
             elif extension in ("jpg", "jpeg"):
-                self.optimize_jpeg(file_path, show_log)
+                self.optimize_jpeg(file_path, show_log, original_size)
             elif extension == "webp":
-                self.optimize_webp(file_path, show_log)
+                self.optimize_webp(file_path, show_log, original_size)
         except Exception as e:
             if show_log:
-                print(f"[SD Prompt Saver] Compression error: {e}")
+                print(f"[SD Prompt Saver V2] Compression error: {e}")
 
-    def optimize_png(self, file_path: Path, show_log: bool):
+    def optimize_png(self, file_path: Path, show_log: bool, original_size: int):
         """PNG compression: pngquant + oxipng (fallback to Pillow)"""
-        original_size = os.path.getsize(file_path)
+        size_after_pngquant = original_size
+        size_after_oxipng = original_size
+        used_pngquant = False
+        used_oxipng = False
 
-        # Try oxipng (lossless)
+        # Step 1: Try pngquant (lossy but visually lossless)
+        pngquant_path = self.get_tool_path("pngquant")
         try:
             result = subprocess.run(
-                ["oxipng", "-o", "2", "--quiet", str(file_path)],
+                [pngquant_path, "--quality=85-95", "--force", "--ext", ".png", str(file_path)],
                 capture_output=True,
                 timeout=30,
                 check=False
             )
             if result.returncode == 0:
-                new_size = os.path.getsize(file_path)
-                if show_log and new_size < original_size:
-                    reduction = (original_size - new_size) / original_size * 100
-                    print(f"[SD Prompt Saver] PNG optimized: -{reduction:.1f}%")
-                return
+                size_after_pngquant = os.path.getsize(file_path)
+                used_pngquant = True
         except (FileNotFoundError, subprocess.TimeoutExpired):
             pass
 
-        # Fallback: Pillow re-save with higher compression
+        # Step 2: Try oxipng (lossless optimization)
+        oxipng_path = self.get_tool_path("oxipng")
         try:
-            from PIL import Image
-            with Image.open(str(file_path)) as img:
-                pnginfo = PngInfo()
-                if hasattr(img, 'text') and img.text:
-                    for key, value in img.text.items():
-                        pnginfo.add_text(key, value)
-                img.save(str(file_path), format="PNG", pnginfo=pnginfo, compress_level=9, optimize=True)
-
-            new_size = os.path.getsize(file_path)
-            if show_log and new_size < original_size:
-                reduction = (original_size - new_size) / original_size * 100
-                print(f"[SD Prompt Saver] PNG optimized (Pillow): -{reduction:.1f}%")
-        except Exception:
+            result = subprocess.run(
+                [oxipng_path, "-o", "2", "--quiet", str(file_path)],
+                capture_output=True,
+                timeout=30,
+                check=False
+            )
+            if result.returncode == 0:
+                size_after_oxipng = os.path.getsize(file_path)
+                used_oxipng = True
+        except (FileNotFoundError, subprocess.TimeoutExpired):
             pass
 
-    def optimize_jpeg(self, file_path: Path, show_log: bool):
+        # Fallback: Pillow optimization if no tools worked
+        if not used_pngquant and not used_oxipng:
+            try:
+                with Image.open(str(file_path)) as img:
+                    pnginfo = PngInfo()
+                    if hasattr(img, 'text') and img.text:
+                        for key, value in img.text.items():
+                            pnginfo.add_text(key, value)
+                    img.save(str(file_path), format="PNG", pnginfo=pnginfo,
+                            compress_level=9, optimize=True)
+                size_after_oxipng = os.path.getsize(file_path)
+            except Exception:
+                pass
+
+        # Log results
+        if show_log:
+            final_size = os.path.getsize(file_path)
+            if used_pngquant:
+                pq_reduction = (original_size - size_after_pngquant) / original_size * 100
+                print(f"[SD Prompt Saver V2] PNG (pngquant): {original_size} → {size_after_pngquant} bytes (-{pq_reduction:.1f}%)")
+            if used_oxipng:
+                ox_reduction = (size_after_pngquant - size_after_oxipng) / size_after_pngquant * 100
+                print(f"[SD Prompt Saver V2] PNG (oxipng): {size_after_pngquant} → {size_after_oxipng} bytes (-{ox_reduction:.1f}%)")
+            if used_pngquant or used_oxipng:
+                total_reduction = (original_size - final_size) / original_size * 100
+                print(f"[SD Prompt Saver V2] PNG Total: {original_size} → {final_size} bytes (-{total_reduction:.1f}%)")
+            elif final_size < original_size:
+                reduction = (original_size - final_size) / original_size * 100
+                print(f"[SD Prompt Saver V2] PNG (Pillow): {original_size} → {final_size} bytes (-{reduction:.1f}%)")
+
+    def optimize_jpeg(self, file_path: Path, show_log: bool, original_size: int):
         """JPEG compression: jpegtran (fallback to Pillow)"""
-        original_size = os.path.getsize(file_path)
+        used_jpegtran = False
 
         # Try jpegtran
+        jpegtran_path = self.get_tool_path("jpegtran")
         try:
             with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
                 tmp_path = Path(tmp.name)
 
             result = subprocess.run(
-                ["jpegtran", "-optimize", "-progressive", "-copy", "all",
+                [jpegtran_path, "-optimize", "-progressive", "-copy", "all",
                  "-outfile", str(tmp_path), str(file_path)],
                 capture_output=True,
                 timeout=30,
@@ -394,26 +442,54 @@ class SDPromptSaverWithCompression:
 
             if result.returncode == 0 and tmp_path.exists():
                 tmp_path.replace(file_path)
-                new_size = os.path.getsize(file_path)
-                if show_log and new_size < original_size:
-                    reduction = (original_size - new_size) / original_size * 100
-                    print(f"[SD Prompt Saver] JPEG optimized: -{reduction:.1f}%")
+                used_jpegtran = True
             else:
                 tmp_path.unlink(missing_ok=True)
         except (FileNotFoundError, subprocess.TimeoutExpired):
             pass
 
-    def optimize_webp(self, file_path: Path, show_log: bool):
+        # Fallback: Pillow optimization
+        if not used_jpegtran:
+            try:
+                exif_dict = None
+                try:
+                    exif_dict = piexif.load(str(file_path))
+                except:
+                    pass
+
+                with Image.open(str(file_path)) as img:
+                    img.save(str(file_path), format="JPEG", quality=95,
+                            optimize=True, progressive=True)
+
+                if exif_dict:
+                    try:
+                        exif_bytes = piexif.dump(exif_dict)
+                        piexif.insert(exif_bytes, str(file_path))
+                    except:
+                        pass
+            except Exception:
+                pass
+
+        # Log results
+        if show_log:
+            final_size = os.path.getsize(file_path)
+            if final_size < original_size:
+                reduction = (original_size - final_size) / original_size * 100
+                method = "jpegtran" if used_jpegtran else "Pillow"
+                print(f"[SD Prompt Saver V2] JPEG ({method}): {original_size} → {final_size} bytes (-{reduction:.1f}%)")
+
+    def optimize_webp(self, file_path: Path, show_log: bool, original_size: int):
         """WebP compression: cwebp (fallback to Pillow)"""
-        original_size = os.path.getsize(file_path)
+        used_cwebp = False
 
         # Try cwebp
+        cwebp_path = self.get_tool_path("cwebp")
         try:
             with tempfile.NamedTemporaryFile(suffix=".webp", delete=False) as tmp:
                 tmp_path = Path(tmp.name)
 
             result = subprocess.run(
-                ["cwebp", "-lossless", "-m", "6", "-quiet",
+                [cwebp_path, "-lossless", "-m", "6", "-quiet",
                  str(file_path), "-o", str(tmp_path)],
                 capture_output=True,
                 timeout=30,
@@ -422,14 +498,41 @@ class SDPromptSaverWithCompression:
 
             if result.returncode == 0 and tmp_path.exists():
                 tmp_path.replace(file_path)
-                new_size = os.path.getsize(file_path)
-                if show_log and new_size < original_size:
-                    reduction = (original_size - new_size) / original_size * 100
-                    print(f"[SD Prompt Saver] WebP optimized: -{reduction:.1f}%")
+                used_cwebp = True
             else:
                 tmp_path.unlink(missing_ok=True)
         except (FileNotFoundError, subprocess.TimeoutExpired):
             pass
+
+        # Fallback: Pillow optimization
+        if not used_cwebp:
+            try:
+                exif_dict = None
+                try:
+                    exif_dict = piexif.load(str(file_path))
+                except:
+                    pass
+
+                with Image.open(str(file_path)) as img:
+                    img.save(str(file_path), format="WEBP", lossless=True,
+                            quality=100, method=6)
+
+                if exif_dict:
+                    try:
+                        exif_bytes = piexif.dump(exif_dict)
+                        piexif.insert(exif_bytes, str(file_path))
+                    except:
+                        pass
+            except Exception:
+                pass
+
+        # Log results
+        if show_log:
+            final_size = os.path.getsize(file_path)
+            if final_size < original_size:
+                reduction = (original_size - final_size) / original_size * 100
+                method = "cwebp" if used_cwebp else "Pillow"
+                print(f"[SD Prompt Saver V2] WebP ({method}): {original_size} → {final_size} bytes (-{reduction:.1f}%)")
 
     # Original SD Prompt Saver methods (unchanged)
     @staticmethod
