@@ -102,7 +102,7 @@ class SDPromptSaverWithCompression:
                 "extra_info": ("STRING", {"default": "", "multiline": True}),
                 # Compression options
                 "enable_compression": ("BOOLEAN", {"default": True}),
-                "show_compression_log": ("BOOLEAN", {"default": False}),
+                "show_compression_log": ("BOOLEAN", {"default": True}),
             },
             "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
         }
