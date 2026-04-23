@@ -18,12 +18,19 @@ import json
 import subprocess
 import hashlib
 import tempfile
+import sys
 from pathlib import Path
 from datetime import datetime
 from PIL import Image
 from PIL.PngImagePlugin import PngInfo
 import numpy as np
 import folder_paths
+
+# Helper function for immediate logging
+def log(msg):
+    """Print with immediate flush for debugging"""
+    print(msg)
+    sys.stdout.flush()
 
 # Optional: piexif for JPEG/WebP EXIF metadata
 try:
@@ -269,17 +276,50 @@ class SDPromptSaverOptimized:
         return name
 
     @staticmethod
+    @staticmethod
     def calculate_model_hash(file_path, hash_length=10):
+        """
+        Calculate model hash with timeout protection.
+        For large models (>1GB), this can take time, so we add progress logging.
+        """
         try:
             if not os.path.exists(file_path):
                 return None
+
+            file_size = os.path.getsize(file_path)
+            file_size_gb = file_size / (1024**3)
+
+            # Skip hash calculation for very large files (>6GB)
+            if file_size_gb > 6:
+                print(f"[SDPromptSaverOptimized] Skipping hash for large model ({file_size_gb:.1f}GB)")
+                return None
+
+            # Log progress for large files
+            if file_size_gb > 1:
+                print(f"[SDPromptSaverOptimized] Calculating hash for {file_size_gb:.1f}GB model (this may take time)...")
+
             sha256 = hashlib.sha256()
+            bytes_read = 0
+            chunk_size = 65536  # 64KB chunks
+
             with open(file_path, 'rb') as f:
-                for chunk in iter(lambda: f.read(65536), b''):
+                for chunk in iter(lambda: f.read(chunk_size), b''):
                     sha256.update(chunk)
-            return sha256.hexdigest()[:hash_length]
+                    bytes_read += len(chunk)
+
+                    # Progress log every 1GB for large files
+                    if file_size_gb > 2 and bytes_read % (1024**3) < chunk_size:
+                        progress = (bytes_read / file_size) * 100
+                        print(f"[SDPromptSaverOptimized] Hash progress: {progress:.0f}%")
+
+            hash_result = sha256.hexdigest()[:hash_length]
+            if file_size_gb > 1:
+                print(f"[SDPromptSaverOptimized] Hash calculation complete: {hash_result}")
+
+            return hash_result
+
         except Exception as e:
-            print(f"[SDPromptSaverOptimized] hash error: {e}")
+            print(f"[SDPromptSaverOptimized] Hash calculation error: {e}")
             return None
 
     # ------------------------------------------------------------------
@@ -646,14 +686,19 @@ class SDPromptSaverOptimized:
                          else Path(output_dir) / subfolder)
         output_folder.mkdir(parents=True, exist_ok=True)
 
-        # Model hash
+        # Model hash calculation (can be slow for large models)
         model_hash = ""
         if calculate_hash and model_name:
+            print(f"[SDPromptSaverOptimized] Looking up model: {model_name}")
             for mp in folder_paths.get_filename_list("checkpoints"):
                 if Path(mp).name == model_name or mp == model_name:
                     full = folder_paths.get_full_path("checkpoints", mp)
+                    print(f"[SDPromptSaverOptimized] Found model path: {full}")
                     model_hash = self.calculate_model_hash(full) or ""
                     break
+
+            if not model_hash:
+                print(f"[SDPromptSaverOptimized] Model hash not calculated (disabled for large files or model not found)")
 
         # Build A1111 metadata string
         sampler_str = sampler_name or "unknown"
@@ -684,26 +729,43 @@ class SDPromptSaverOptimized:
         filenames = []
         file_paths = []
 
-        for i, image_tensor in enumerate(images):
-            img_array = (image_tensor.cpu().numpy() * 255).astype(np.uint8)
-            img = Image.fromarray(img_array)
+        total_images = len(images)
+        print(f"[SDPromptSaverOptimized] Processing {total_images} image(s)...")
 
+        for i, image_tensor in enumerate(images):
+            print(f"[SDPromptSaverOptimized] Image {i+1}/{total_images}: Converting tensor to image...")
+
+            try:
+                img_array = (image_tensor.cpu().numpy() * 255).astype(np.uint8)
+                img = Image.fromarray(img_array)
+            except Exception as e:
+                print(f"[SDPromptSaverOptimized] ERROR converting image {i+1}: {e}")
+                continue
+
+            print(f"[SDPromptSaverOptimized] Image {i+1}/{total_images}: Generating filename...")
             counter = self.get_counter(output_folder, save_suffix) + i
             variable_map["%counter"] = f"{counter:05}"
 
             file_name = self.get_path(filename, variable_map)
             file_path = output_folder / f"{file_name}.{save_suffix}"
 
-            # Deduplicate
+            # Deduplicate with safety limit
             offset = 0
-            while file_path.exists():
+            max_attempts = 1000
+            while file_path.exists() and offset < max_attempts:
                 offset += 1
                 variable_map["%counter"] = f"{counter + offset:05}"
                 file_name = self.get_path(filename, variable_map)
                 file_path = output_folder / f"{file_name}.{save_suffix}"
 
+            if offset >= max_attempts:
+                print(f"[SDPromptSaverOptimized] ERROR: Could not find unique filename after {max_attempts} attempts")
+                continue
+
             # Save with metadata
             try:
+                print(f"[SDPromptSaverOptimized] Image {i+1}/{total_images}: Saving to {file_path}...")
+
                 if save_suffix == "png":
                     self.save_png(img, file_path, metadata_text, prompt, extra_pnginfo)
                 elif save_suffix == "webp":
@@ -717,9 +779,11 @@ class SDPromptSaverOptimized:
                     print(f"[SDPromptSaverOptimized] ERROR: Failed to save {file_path}")
                     continue
 
-                print(f"[SDPromptSaverOptimized] saved: {file_path}")
+                print(f"[SDPromptSaverOptimized] Image {i+1}/{total_images}: Saved successfully")
 
                 # Optimize (external tools + Pillow fallback)
+                print(f"[SDPromptSaverOptimized] Image {i+1}/{total_images}: Optimizing...")
+
                 if save_suffix == "png":
                     self.optimize_png(file_path, preserve_metadata, show_compression_log)
                 elif save_suffix == "webp":
@@ -727,8 +791,10 @@ class SDPromptSaverOptimized:
                 else:  # jpg / jpeg
                     self.optimize_jpeg(file_path, preserve_metadata, show_compression_log)
 
+                print(f"[SDPromptSaverOptimized] Image {i+1}/{total_images}: Optimization complete")
+
             except Exception as e:
-                print(f"[SDPromptSaverOptimized] ERROR saving image: {e}")
+                print(f"[SDPromptSaverOptimized] ERROR saving image {i+1}: {e}")
                 import traceback
                 traceback.print_exc()
                 continue
