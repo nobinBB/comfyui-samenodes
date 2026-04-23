@@ -247,12 +247,25 @@ class LoraWildcardGeneratorV2:
             # Parse all JSON files
             entries = []
             skipped_files = []
+            duplicate_loras = []
+            seen_lora_names = set()
 
             for json_file in json_files:
                 print(f"Processing: {json_file.name}")
                 entry = self.parse_json_file(json_file)
 
                 if entry:
+                    lora_name = entry['lora_name']
+
+                    # Check for duplicate LoRA names
+                    if lora_name in seen_lora_names:
+                        duplicate_loras.append(json_file.name)
+                        print(f"  ⚠ Skipped: {lora_name} (duplicate)")
+                        continue
+
+                    # Add to seen set
+                    seen_lora_names.add(lora_name)
+
                     entries.append(entry)
                     print(f"  ✓ Extracted: {entry['lora_name']}")
                     triggers = ', '.join(entry['trained_words']) if entry['trained_words'] else '(none)'
@@ -284,8 +297,11 @@ class LoraWildcardGeneratorV2:
             print(f"✓ Wildcard file generated successfully! (V2)")
             print(f"Output: {yaml_filepath}")
             print(f"Entries: {len(entries)}")
+            if duplicate_loras:
+                print(f"Duplicates: {len(duplicate_loras)} files (skipped)")
+                print(f"Duplicate files: {', '.join(duplicate_loras)}")
             if skipped_files:
-                print(f"Skipped: {len(skipped_files)} files")
+                print(f"Skipped: {len(skipped_files)} files (parse error)")
                 print(f"Skipped files: {', '.join(skipped_files)}")
             print(f"{'='*60}\n")
 
