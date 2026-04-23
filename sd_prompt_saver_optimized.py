@@ -377,7 +377,7 @@ class SDPromptSaverOptimized:
             cmd.extend(["--output", str(tmp_path), str(file_path)])
 
             result = subprocess.run(cmd, check=False, capture_output=True,
-                                   text=True, timeout=60)
+                                   text=True, timeout=30)  # Reduced from 60 to 30
 
             if result.returncode == 0 and tmp_path.exists():
                 tmp_size = tmp_path.stat().st_size
@@ -401,10 +401,15 @@ class SDPromptSaverOptimized:
                 if show_log and result.returncode != 0:
                     print(f"[SDPromptSaverOptimized] pngquant failed (code {result.returncode}): {result.stderr.strip()}")
 
+        except subprocess.TimeoutExpired:
+            tmp_path.unlink(missing_ok=True)
+            if show_log:
+                print(f"[SDPromptSaverOptimized] pngquant timeout (>30s), skipped")
         except FileNotFoundError:
             if show_log:
                 print(f"[SDPromptSaverOptimized] pngquant not found in PATH")
         except Exception as e:
+            tmp_path.unlink(missing_ok=True)
             if show_log:
                 print(f"[SDPromptSaverOptimized] pngquant error: {e}")
 
@@ -419,7 +424,7 @@ class SDPromptSaverOptimized:
             cmd.append(str(file_path))
 
             result = subprocess.run(cmd, check=False, capture_output=True,
-                                   text=True, timeout=300)
+                                   text=True, timeout=60)  # Reduced from 300 to 60
 
             if result.returncode == 0:
                 after_oxipng = os.path.getsize(file_path)
@@ -429,10 +434,14 @@ class SDPromptSaverOptimized:
                     print(f"[SDPromptSaverOptimized] PNG (oxipng): {before_oxipng:,} B → {after_oxipng:,} B (-{reduction2:.1f}%)")
                 current_size = after_oxipng
 
+        except subprocess.TimeoutExpired:
+            if show_log:
+                print(f"[SDPromptSaverOptimized] oxipng timeout (>60s), skipped")
         except FileNotFoundError:
             pass  # oxipng not found
-        except Exception:
-            pass  # oxipng failed
+        except Exception as e:
+            if show_log:
+                print(f"[SDPromptSaverOptimized] oxipng error: {e}")
 
         # If no external tools worked, fallback to Pillow
         if not pngquant_used and not oxipng_used:
@@ -489,7 +498,7 @@ class SDPromptSaverOptimized:
             cmd += [str(file_path), "-o", str(tmp_path)]
 
             result = subprocess.run(cmd, check=False, capture_output=True,
-                                   text=True, timeout=300)
+                                   text=True, timeout=60)  # Reduced from 300 to 60
 
             if result.returncode == 0 and tmp_path.exists():
                 tmp_size = tmp_path.stat().st_size
@@ -506,10 +515,16 @@ class SDPromptSaverOptimized:
                     tmp_path.unlink(missing_ok=True)
             else:
                 tmp_path.unlink(missing_ok=True)
+        except subprocess.TimeoutExpired:
+            tmp_path.unlink(missing_ok=True)
+            if show_log:
+                print(f"[SDPromptSaverOptimized] cwebp timeout (>60s), skipped")
         except FileNotFoundError:
             pass  # cwebp not found, fallback to Pillow
-        except Exception:
-            pass  # cwebp failed, fallback to Pillow
+        except Exception as e:
+            tmp_path.unlink(missing_ok=True)
+            if show_log:
+                print(f"[SDPromptSaverOptimized] cwebp error: {e}")
 
         # Fallback: Pillow lossless re-save
         try:
@@ -540,7 +555,7 @@ class SDPromptSaverOptimized:
                    "-copy", copy_flag, "-outfile", str(tmp_path), str(file_path)]
 
             result = subprocess.run(cmd, check=False, capture_output=True,
-                                   text=True, timeout=120)
+                                   text=True, timeout=30)  # Reduced from 120 to 30
 
             if result.returncode == 0 and tmp_path.exists():
                 tmp_size = tmp_path.stat().st_size
@@ -557,9 +572,14 @@ class SDPromptSaverOptimized:
                     tmp_path.unlink(missing_ok=True)
             else:
                 tmp_path.unlink(missing_ok=True)
+        except subprocess.TimeoutExpired:
+            tmp_path.unlink(missing_ok=True)
+            if show_log:
+                print(f"[SDPromptSaverOptimized] jpegtran timeout (>30s), skipped")
         except FileNotFoundError:
             pass  # jpegtran not found, fallback to Pillow
         except Exception as e:
+            tmp_path.unlink(missing_ok=True)
             if show_log:
                 print(f"[SDPromptSaverOptimized] jpegtran error: {e}")
 
