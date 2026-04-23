@@ -276,7 +276,6 @@ class SDPromptSaverOptimized:
         return name
 
     @staticmethod
-    @staticmethod
     def calculate_model_hash(file_path, hash_length=10):
         """
         Calculate model hash with timeout protection.
@@ -749,6 +748,10 @@ class SDPromptSaverOptimized:
             file_name = self.get_path(filename, variable_map)
             file_path = output_folder / f"{file_name}.{save_suffix}"
 
+            print(f"[SDPromptSaverOptimized] Initial filename: {file_name}.{save_suffix}")
+            print(f"[SDPromptSaverOptimized] File path: {file_path}")
+            print(f"[SDPromptSaverOptimized] File exists: {file_path.exists()}")
+
             # Deduplicate with safety limit
             offset = 0
             max_attempts = 1000
@@ -758,8 +761,15 @@ class SDPromptSaverOptimized:
                 file_name = self.get_path(filename, variable_map)
                 file_path = output_folder / f"{file_name}.{save_suffix}"
 
+                # Debug log every 100 attempts
+                if offset % 100 == 0:
+                    print(f"[SDPromptSaverOptimized] Dedup attempt {offset}: {file_name}.{save_suffix} exists: {file_path.exists()}")
+
             if offset >= max_attempts:
                 print(f"[SDPromptSaverOptimized] ERROR: Could not find unique filename after {max_attempts} attempts")
+                print(f"[SDPromptSaverOptimized] Last attempted filename: {file_name}.{save_suffix}")
+                print(f"[SDPromptSaverOptimized] Filename template: {filename}")
+                print(f"[SDPromptSaverOptimized] Variable map: {variable_map}")
                 continue
 
             # Save with metadata
