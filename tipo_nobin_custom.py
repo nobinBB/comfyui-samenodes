@@ -252,6 +252,9 @@ def filter_generated_content(
     filtered_output = ' '.join(parts)
 
     return filtered_output, excluded
+
+
+def filter_natural_language(
     nl_text: str,
     ban_tags: List[str],
     model,
