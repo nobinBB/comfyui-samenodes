@@ -713,42 +713,97 @@ class TIPONobinCustom:
                 device=device,
             )
 
-            # Extract outputs
-            # TIPO returns: (prompt, user_prompt, unformatted_prompt, unformatted_user_prompt)
-            formatted_prompt = tipo_result[0]
-            original_output = formatted_prompt
+            # Extract outputs from TIPO
+            # TIPO returns: (formatted_prompt_by_tipo, formatted_prompt_by_user,
+            #                unformatted_prompt_by_tipo, unformatted_prompt_by_user)
+            formatted_by_tipo = tipo_result[0]      # Full output with TIPO additions
+            formatted_by_user = tipo_result[1]      # Original user input formatted
+            unformatted_by_tipo = tipo_result[2]    # tags + addon_tags + addon_nl
+            unformatted_by_user = tipo_result[3]    # Original user input unformatted
+
+            original_output = formatted_by_tipo
+
+            if show_filtering_log:
+                print(f"\n[TIPO nobin custom] TIPO output analysis:")
+                print(f"  Original user input: '{unformatted_by_user[:100]}...'")
+                print(f"  TIPO full output: '{unformatted_by_tipo[:100]}...'")
 
             # Apply semantic filtering if enabled
             if enable_semantic_filtering and model:
-                # Filter only TIPO's generated content, keep original input
-                filtered_output, excluded = filter_generated_content(
-                    original_user_input,
-                    formatted_prompt,
-                    ban_tag_list,
-                    model,
-                    show_filtering_log
-                )
+                # Extract what TIPO added by removing original from full output
+                # unformatted_by_tipo format: "original_tags, addon_tags\naddon_nl"
+                # We need to filter only addon_tags and addon_nl
 
-                all_excluded.extend(excluded)
+                # Find original input in TIPO output
+                if unformatted_by_user in unformatted_by_tipo:
+                    # Remove original to get addon
+                    addon_part = unformatted_by_tipo.replace(unformatted_by_user, '', 1).strip()
+                    addon_part = addon_part.lstrip(',').lstrip('\n').strip()
 
-                # Check keyword count (count only in generated part)
-                keyword_count = count_keywords(filtered_output) - count_keywords(original_user_input)
+                    if show_filtering_log:
+                        print(f"  TIPO additions (to filter): '{addon_part[:100]}...'")
 
-                if show_filtering_log:
-                    print(f"[TIPO nobin custom] Attempt {attempt + 1}: {keyword_count} new keywords after filtering")
+                    # Split addon into tags and NL
+                    if '\n' in addon_part:
+                        addon_tags, addon_nl = addon_part.split('\n', 1)
+                    else:
+                        addon_tags = addon_part
+                        addon_nl = ""
 
-                if keyword_count >= minimum_keyword_count:
+                    # Filter addon tags with regex
+                    filtered_addon_tags, excluded_tags = filter_tags_regex(
+                        addon_tags,
+                        ban_tag_list,
+                        show_filtering_log
+                    )
+
+                    # Filter addon NL with semantic similarity
+                    filtered_addon_nl, excluded_nl = filter_natural_language(
+                        addon_nl,
+                        ban_tag_list,
+                        model,
+                        show_filtering_log
+                    )
+
+                    all_excluded.extend(excluded_nl)
+
+                    # Reconstruct: original (protected) + filtered addon
+                    result_parts = [unformatted_by_user]  # Always include original!
+
+                    if filtered_addon_tags:
+                        result_parts.append(filtered_addon_tags)
+
+                    tags_part = ', '.join(result_parts)
+
+                    if filtered_addon_nl:
+                        filtered_output = f"{tags_part}\n{filtered_addon_nl}"
+                    else:
+                        filtered_output = tags_part
+
+                    # Count keywords in ADDED content only
+                    addon_keyword_count = count_keywords(filtered_addon_tags) + count_keywords(filtered_addon_nl)
+
+                    if show_filtering_log:
+                        print(f"[TIPO nobin custom] Attempt {attempt + 1}: {addon_keyword_count} new keywords after filtering")
+
+                    if addon_keyword_count >= minimum_keyword_count:
+                        break
+
+                    # Regenerate with new seed
+                    regeneration_count += 1
+                    current_seed += 1
+
+                    if show_filtering_log:
+                        print(f"[TIPO nobin custom] Regenerating with seed {current_seed}...")
+                else:
+                    # Can't find original in output - use full output (shouldn't happen)
+                    if show_filtering_log:
+                        print(f"[TIPO nobin custom] Warning: Could not find original in output")
+                    filtered_output = formatted_by_tipo
                     break
-
-                # Regenerate with new seed
-                regeneration_count += 1
-                current_seed += 1
-
-                if show_filtering_log:
-                    print(f"[TIPO nobin custom] Regenerating with seed {current_seed}...")
             else:
                 # No semantic filtering
-                filtered_output = formatted_prompt
+                filtered_output = formatted_by_tipo
                 break
 
         # Format excluded words
