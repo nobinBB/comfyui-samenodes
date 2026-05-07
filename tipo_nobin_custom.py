@@ -27,60 +27,109 @@ except ImportError:
 # Try to import TIPO from z-tipo-extension
 TIPO_AVAILABLE = False
 OriginalTIPO = None
+TIPO_ERROR_MESSAGE = ""
 
-try:
+def try_import_tipo():
+    """Try multiple methods to import TIPO from z-tipo-extension"""
+    global TIPO_AVAILABLE, OriginalTIPO, TIPO_ERROR_MESSAGE
+
     import sys
+    import importlib
     import importlib.util
     from pathlib import Path as PathlibPath
 
-    # Find z-tipo-extension in custom_nodes
+    # Method 1: Try to find already-loaded z-tipo module in sys.modules
+    print("[TIPO nobin custom] Method 1: Checking sys.modules for z-tipo...")
+    for module_name in sys.modules:
+        if 'tipo' in module_name.lower() and 'nodes' in module_name.lower():
+            try:
+                module = sys.modules[module_name]
+                if hasattr(module, 'TIPO'):
+                    OriginalTIPO = module.TIPO
+                    TIPO_AVAILABLE = True
+                    print(f"[TIPO nobin custom] Success! Found TIPO in {module_name}")
+                    return True
+            except:
+                pass
+
+    # Method 2: Try direct import (if z-tipo is in PYTHONPATH)
+    print("[TIPO nobin custom] Method 2: Trying direct import...")
+    try:
+        # Try importing as if it's already in path
+        if 'nodes.tipo' in sys.modules:
+            tipo_module = sys.modules['nodes.tipo']
+        else:
+            tipo_module = importlib.import_module('nodes.tipo')
+
+        if hasattr(tipo_module, 'TIPO'):
+            OriginalTIPO = tipo_module.TIPO
+            TIPO_AVAILABLE = True
+            print("[TIPO nobin custom] Success! Imported nodes.tipo directly")
+            return True
+    except ImportError as e:
+        print(f"[TIPO nobin custom] Direct import failed: {e}")
+
+    # Method 3: Search filesystem
+    print("[TIPO nobin custom] Method 3: Searching filesystem...")
     current_dir = PathlibPath(__file__).parent
     custom_nodes_dir = current_dir.parent
 
     # Try multiple possible names
-    possible_names = ["z-tipo-extension", "z_tipo_extension", "tipo-extension", "ComfyUI-z-tipo"]
-    tipo_dir = None
+    possible_names = [
+        "z-tipo-extension",
+        "ComfyUI-z-tipo-extension",
+        "z_tipo_extension",
+        "tipo-extension",
+        "ComfyUI-tipo",
+        "tipo",
+    ]
+
+    print(f"[TIPO nobin custom] Searching in: {custom_nodes_dir}")
 
     for name in possible_names:
-        test_dir = custom_nodes_dir / name
-        if test_dir.exists() and (test_dir / "nodes" / "tipo.py").exists():
-            tipo_dir = test_dir
-            print(f"[TIPO nobin custom] Found z-tipo-extension at: {tipo_dir}")
-            break
+        tipo_dir = custom_nodes_dir / name
+        tipo_py = tipo_dir / "nodes" / "tipo.py"
 
-    if tipo_dir:
-        # Add to path
-        nodes_dir = tipo_dir / "nodes"
-        if str(tipo_dir) not in sys.path:
-            sys.path.insert(0, str(tipo_dir))
+        if tipo_py.exists():
+            print(f"[TIPO nobin custom] Found tipo.py at: {tipo_py}")
+            try:
+                # Load the module
+                spec = importlib.util.spec_from_file_location(
+                    f"tipo_extension_{name}",
+                    tipo_py
+                )
+                if spec and spec.loader:
+                    tipo_module = importlib.util.module_from_spec(spec)
+                    sys.modules[spec.name] = tipo_module
+                    spec.loader.exec_module(tipo_module)
 
-        # Import tipo module
-        spec = importlib.util.spec_from_file_location(
-            "tipo_original",
-            nodes_dir / "tipo.py"
-        )
-        if spec and spec.loader:
-            tipo_module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(tipo_module)
+                    if hasattr(tipo_module, 'TIPO'):
+                        OriginalTIPO = tipo_module.TIPO
+                        TIPO_AVAILABLE = True
+                        print(f"[TIPO nobin custom] Success! Loaded TIPO from {tipo_dir}")
+                        return True
+                    else:
+                        print(f"[TIPO nobin custom] Warning: {tipo_py} has no TIPO class")
+            except Exception as e:
+                print(f"[TIPO nobin custom] Error loading {tipo_py}: {e}")
+                import traceback
+                traceback.print_exc()
 
-            # Get TIPO class
-            if hasattr(tipo_module, 'TIPO'):
-                OriginalTIPO = tipo_module.TIPO
-                TIPO_AVAILABLE = True
-                print("[TIPO nobin custom] Successfully loaded TIPO class")
-            else:
-                print("[TIPO nobin custom] Warning: TIPO class not found in module")
-        else:
-            print("[TIPO nobin custom] Warning: Could not create module spec")
-    else:
-        print("[TIPO nobin custom] Warning: z-tipo-extension not found in custom_nodes/")
-        print(f"[TIPO nobin custom] Searched in: {custom_nodes_dir}")
-        print(f"[TIPO nobin custom] Tried names: {possible_names}")
+    # All methods failed
+    TIPO_ERROR_MESSAGE = (
+        f"z-tipo-extension not found!\n"
+        f"Searched in: {custom_nodes_dir}\n"
+        f"Tried names: {', '.join(possible_names)}\n"
+        f"Please install: https://github.com/KohakuBlueleaf/z-tipo-extension"
+    )
+    print(f"[TIPO nobin custom] {TIPO_ERROR_MESSAGE}")
+    return False
 
+# Try to import on module load
+try:
+    try_import_tipo()
 except Exception as e:
-    TIPO_AVAILABLE = False
-    OriginalTIPO = None
-    print(f"[TIPO nobin custom] Error loading z-tipo-extension: {e}")
+    print(f"[TIPO nobin custom] Fatal error during import: {e}")
     import traceback
     traceback.print_exc()
 
@@ -311,8 +360,13 @@ class TIPONobinCustom:
     ):
         # Check if TIPO is available
         if not TIPO_AVAILABLE or OriginalTIPO is None:
+            error_msg = TIPO_ERROR_MESSAGE or "z-tipo-extension not found. Please install it in custom_nodes/"
+            print(f"\n{'='*60}")
+            print(f"[TIPO nobin custom] ERROR")
+            print(error_msg)
+            print(f"{'='*60}\n")
             return (
-                "ERROR: z-tipo-extension not found. Please install it in custom_nodes/",
+                f"ERROR: {error_msg}",
                 "",
                 0,
                 "z-tipo-extension required"
