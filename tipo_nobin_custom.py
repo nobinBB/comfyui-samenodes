@@ -25,31 +25,64 @@ except ImportError:
     print("[TIPO nobin custom] Warning: sentence-transformers not installed. Semantic filtering disabled.")
 
 # Try to import TIPO from z-tipo-extension
+TIPO_AVAILABLE = False
+OriginalTIPO = None
+
 try:
     import sys
+    import importlib.util
     from pathlib import Path as PathlibPath
 
     # Find z-tipo-extension in custom_nodes
     current_dir = PathlibPath(__file__).parent
     custom_nodes_dir = current_dir.parent
-    tipo_extension_dir = custom_nodes_dir / "z-tipo-extension"
 
-    if tipo_extension_dir.exists():
-        tipo_nodes_dir = tipo_extension_dir / "nodes"
-        if str(tipo_nodes_dir) not in sys.path:
-            sys.path.insert(0, str(tipo_extension_dir))
+    # Try multiple possible names
+    possible_names = ["z-tipo-extension", "z_tipo_extension", "tipo-extension", "ComfyUI-z-tipo"]
+    tipo_dir = None
 
-        from nodes.tipo import TIPO as OriginalTIPO
-        TIPO_AVAILABLE = True
-        print("[TIPO nobin custom] z-tipo-extension found and loaded")
+    for name in possible_names:
+        test_dir = custom_nodes_dir / name
+        if test_dir.exists() and (test_dir / "nodes" / "tipo.py").exists():
+            tipo_dir = test_dir
+            print(f"[TIPO nobin custom] Found z-tipo-extension at: {tipo_dir}")
+            break
+
+    if tipo_dir:
+        # Add to path
+        nodes_dir = tipo_dir / "nodes"
+        if str(tipo_dir) not in sys.path:
+            sys.path.insert(0, str(tipo_dir))
+
+        # Import tipo module
+        spec = importlib.util.spec_from_file_location(
+            "tipo_original",
+            nodes_dir / "tipo.py"
+        )
+        if spec and spec.loader:
+            tipo_module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(tipo_module)
+
+            # Get TIPO class
+            if hasattr(tipo_module, 'TIPO'):
+                OriginalTIPO = tipo_module.TIPO
+                TIPO_AVAILABLE = True
+                print("[TIPO nobin custom] Successfully loaded TIPO class")
+            else:
+                print("[TIPO nobin custom] Warning: TIPO class not found in module")
+        else:
+            print("[TIPO nobin custom] Warning: Could not create module spec")
     else:
-        TIPO_AVAILABLE = False
-        OriginalTIPO = None
-        print("[TIPO nobin custom] Warning: z-tipo-extension not found. Install it first.")
+        print("[TIPO nobin custom] Warning: z-tipo-extension not found in custom_nodes/")
+        print(f"[TIPO nobin custom] Searched in: {custom_nodes_dir}")
+        print(f"[TIPO nobin custom] Tried names: {possible_names}")
+
 except Exception as e:
     TIPO_AVAILABLE = False
     OriginalTIPO = None
     print(f"[TIPO nobin custom] Error loading z-tipo-extension: {e}")
+    import traceback
+    traceback.print_exc()
 
 
 # Semantic similarity model (lazy loaded)
