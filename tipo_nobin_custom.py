@@ -24,78 +24,74 @@ except ImportError:
     SENTENCE_TRANSFORMERS_AVAILABLE = False
     print("[TIPO nobin custom] Warning: sentence-transformers not installed. Semantic filtering disabled.")
 
-# Try to import TIPO from z-tipo-extension
-TIPO_AVAILABLE = False
-OriginalTIPO = None
-TIPO_ERROR_MESSAGE = ""
+# TIPO will be imported lazily when needed
+_TIPO_CLASS = None
+_TIPO_IMPORT_ATTEMPTED = False
 
-def try_import_tipo():
-    """Try multiple methods to import TIPO from z-tipo-extension"""
-    global TIPO_AVAILABLE, OriginalTIPO, TIPO_ERROR_MESSAGE
+
+def get_tipo_class():
+    """Lazy load TIPO class when first needed"""
+    global _TIPO_CLASS, _TIPO_IMPORT_ATTEMPTED
+
+    if _TIPO_IMPORT_ATTEMPTED:
+        return _TIPO_CLASS
+
+    _TIPO_IMPORT_ATTEMPTED = True
 
     import sys
     import importlib
     import importlib.util
     from pathlib import Path as PathlibPath
 
-    # Method 1: Try to find already-loaded z-tipo module in sys.modules
-    print("[TIPO nobin custom] Method 1: Checking sys.modules for z-tipo...")
-    for module_name in sys.modules:
-        if 'tipo' in module_name.lower() and 'nodes' in module_name.lower():
+    print("[TIPO nobin custom] Attempting to import TIPO...")
+
+    # Method 1: Check sys.modules (z-tipo should be loaded by ComfyUI by now)
+    print("[TIPO nobin custom] Method 1: Checking sys.modules...")
+    for module_name, module in list(sys.modules.items()):
+        if 'tipo' in module_name.lower():
             try:
-                module = sys.modules[module_name]
                 if hasattr(module, 'TIPO'):
-                    OriginalTIPO = module.TIPO
-                    TIPO_AVAILABLE = True
-                    print(f"[TIPO nobin custom] Success! Found TIPO in {module_name}")
-                    return True
+                    _TIPO_CLASS = module.TIPO
+                    print(f"[TIPO nobin custom] ✓ Found TIPO in sys.modules['{module_name}']")
+                    return _TIPO_CLASS
             except:
                 pass
 
-    # Method 2: Try direct import (if z-tipo is in PYTHONPATH)
+    # Method 2: Try direct import
     print("[TIPO nobin custom] Method 2: Trying direct import...")
     try:
-        # Try importing as if it's already in path
-        if 'nodes.tipo' in sys.modules:
-            tipo_module = sys.modules['nodes.tipo']
-        else:
-            tipo_module = importlib.import_module('nodes.tipo')
+        import nodes.tipo
+        if hasattr(nodes.tipo, 'TIPO'):
+            _TIPO_CLASS = nodes.tipo.TIPO
+            print("[TIPO nobin custom] ✓ Successfully imported nodes.tipo")
+            return _TIPO_CLASS
+    except ImportError:
+        pass
 
-        if hasattr(tipo_module, 'TIPO'):
-            OriginalTIPO = tipo_module.TIPO
-            TIPO_AVAILABLE = True
-            print("[TIPO nobin custom] Success! Imported nodes.tipo directly")
-            return True
-    except ImportError as e:
-        print(f"[TIPO nobin custom] Direct import failed: {e}")
-
-    # Method 3: Search filesystem
+    # Method 3: Filesystem search
     print("[TIPO nobin custom] Method 3: Searching filesystem...")
     current_dir = PathlibPath(__file__).parent
     custom_nodes_dir = current_dir.parent
 
-    # Try multiple possible names
     possible_names = [
         "z-tipo-extension",
         "ComfyUI-z-tipo-extension",
         "z_tipo_extension",
+        "z-tipo",
         "tipo-extension",
         "ComfyUI-tipo",
         "tipo",
     ]
-
-    print(f"[TIPO nobin custom] Searching in: {custom_nodes_dir}")
 
     for name in possible_names:
         tipo_dir = custom_nodes_dir / name
         tipo_py = tipo_dir / "nodes" / "tipo.py"
 
         if tipo_py.exists():
-            print(f"[TIPO nobin custom] Found tipo.py at: {tipo_py}")
+            print(f"[TIPO nobin custom] Found: {tipo_py}")
             try:
-                # Load the module
                 spec = importlib.util.spec_from_file_location(
-                    f"tipo_extension_{name}",
+                    f"tipo_loaded_{name}",
                     tipo_py
                 )
                 if spec and spec.loader:
@@ -104,34 +100,20 @@ def try_import_tipo():
                     spec.loader.exec_module(tipo_module)
 
                     if hasattr(tipo_module, 'TIPO'):
-                        OriginalTIPO = tipo_module.TIPO
-                        TIPO_AVAILABLE = True
-                        print(f"[TIPO nobin custom] Success! Loaded TIPO from {tipo_dir}")
-                        return True
-                    else:
-                        print(f"[TIPO nobin custom] Warning: {tipo_py} has no TIPO class")
+                        _TIPO_CLASS = tipo_module.TIPO
+                        print(f"[TIPO nobin custom] ✓ Loaded TIPO from {tipo_dir}")
+                        return _TIPO_CLASS
             except Exception as e:
                 print(f"[TIPO nobin custom] Error loading {tipo_py}: {e}")
-                import traceback
-                traceback.print_exc()
 
     # All methods failed
-    TIPO_ERROR_MESSAGE = (
+    error_msg = (
         f"z-tipo-extension not found!\n"
         f"Searched in: {custom_nodes_dir}\n"
-        f"Tried names: {', '.join(possible_names)}\n"
-        f"Please install: https://github.com/KohakuBlueleaf/z-tipo-extension"
+        f"Tried: {', '.join(possible_names)}"
     )
-    print(f"[TIPO nobin custom] {TIPO_ERROR_MESSAGE}")
-    return False
-
-# Try to import on module load
-try:
-    try_import_tipo()
-except Exception as e:
-    print(f"[TIPO nobin custom] Fatal error during import: {e}")
-    import traceback
-    traceback.print_exc()
+    print(f"[TIPO nobin custom] ✗ {error_msg}")
+    return None
 
 
 # Semantic similarity model (lazy loaded)
@@ -267,11 +249,15 @@ class TIPONobinCustom:
     @classmethod
     def INPUT_TYPES(cls):
         # Get model list from TIPO if available
-        if TIPO_AVAILABLE and hasattr(OriginalTIPO, 'INPUT_TYPES'):
-            tipo_inputs = OriginalTIPO.INPUT_TYPES()
-            model_list = tipo_inputs["required"].get("tipo_model", (["default"], {}))[0]
+        TIPO = get_tipo_class()
+        if TIPO and hasattr(TIPO, 'INPUT_TYPES'):
+            try:
+                tipo_inputs = TIPO.INPUT_TYPES()
+                model_list = tipo_inputs["required"].get("tipo_model", (["default"], {}))[0]
+            except:
+                model_list = ["z-tipo model loading..."]
         else:
-            model_list = ["Install z-tipo-extension first"]
+            model_list = ["z-tipo not loaded yet"]
 
         return {
             "required": {
@@ -358,12 +344,12 @@ class TIPONobinCustom:
         show_filtering_log: bool,
         enable_semantic_filtering: bool,
     ):
-        # Check if TIPO is available
-        if not TIPO_AVAILABLE or OriginalTIPO is None:
-            error_msg = TIPO_ERROR_MESSAGE or "z-tipo-extension not found. Please install it in custom_nodes/"
+        # Get TIPO class (lazy load)
+        TIPO = get_tipo_class()
+        if TIPO is None:
+            error_msg = "z-tipo-extension not found or failed to load. Check console for details."
             print(f"\n{'='*60}")
-            print(f"[TIPO nobin custom] ERROR")
-            print(error_msg)
+            print(f"[TIPO nobin custom] ERROR: {error_msg}")
             print(f"{'='*60}\n")
             return (
                 f"ERROR: {error_msg}",
@@ -405,7 +391,7 @@ class TIPONobinCustom:
             print(f"{'='*60}\n")
 
         # Create TIPO instance and call it
-        tipo_instance = OriginalTIPO()
+        tipo_instance = TIPO()
 
         # Apply semantic filtering with regeneration
         regeneration_count = 0
