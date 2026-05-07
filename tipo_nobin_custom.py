@@ -248,16 +248,33 @@ class TIPONobinCustom:
 
     @classmethod
     def INPUT_TYPES(cls):
-        # Get model list from TIPO if available
-        TIPO = get_tipo_class()
-        if TIPO and hasattr(TIPO, 'INPUT_TYPES'):
-            try:
-                tipo_inputs = TIPO.INPUT_TYPES()
-                model_list = tipo_inputs["required"].get("tipo_model", (["default"], {}))[0]
-            except:
-                model_list = ["z-tipo model loading..."]
-        else:
-            model_list = ["z-tipo not loaded yet"]
+        # Try to get model list from TIPO
+        # Don't use lazy loading here - if it fails, provide empty list
+        # The actual validation happens at execution time
+        try:
+            import sys
+            # Check if tipo is already loaded in sys.modules
+            tipo_module = None
+            for module_name, module in list(sys.modules.items()):
+                if 'tipo' in module_name.lower() and hasattr(module, 'TIPO'):
+                    tipo_module = module
+                    break
+
+            if tipo_module and hasattr(tipo_module, 'MODEL_NAME_LIST'):
+                model_list = tipo_module.MODEL_NAME_LIST
+            elif tipo_module and hasattr(tipo_module.TIPO, 'INPUT_TYPES'):
+                tipo_inputs = tipo_module.TIPO.INPUT_TYPES()
+                model_list = tipo_inputs["required"].get("tipo_model", ([], {}))[0]
+            else:
+                # Fallback: empty list will show as dropdown, won't cause errors
+                model_list = []
+        except Exception as e:
+            # If anything fails, use empty list
+            model_list = []
+
+        # If model_list is empty, use a placeholder that won't break
+        if not model_list:
+            model_list = ["default"]
 
         return {
             "required": {
