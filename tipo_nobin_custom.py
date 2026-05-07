@@ -28,6 +28,59 @@ except ImportError:
 _TIPO_CLASS = None
 _TIPO_IMPORT_ATTEMPTED = False
 
+# Cache for ban tag embeddings (optimization)
+_BAN_TAG_EMBEDDINGS_CACHE = {}
+
+
+def get_ban_tag_embeddings(ban_tags: List[str], model) -> dict:
+    """
+    Get embeddings for ban tags (with caching)
+
+    Returns:
+        dict: {ban_tag: embedding_vector}
+    """
+    if not model or not ban_tags:
+        return {}
+
+    # Create cache key from ban tags
+    cache_key = tuple(sorted(ban_tags))
+
+    # Check cache
+    if cache_key in _BAN_TAG_EMBEDDINGS_CACHE:
+        return _BAN_TAG_EMBEDDINGS_CACHE[cache_key]
+
+    # Compute embeddings
+    embeddings = {}
+    clean_tags = []
+    original_tags = []
+
+    for ban_tag in ban_tags:
+        if not ban_tag.strip():
+            continue
+
+        # Remove regex syntax for semantic comparison
+        ban_clean = ban_tag.strip()
+        ban_clean = re.sub(r'[\.\*\+\?\[\]\(\)\{\}\^\$\|\\]', ' ', ban_clean)
+        ban_clean = ' '.join(ban_clean.split()).lower()
+
+        if ban_clean:
+            clean_tags.append(ban_clean)
+            original_tags.append(ban_tag)
+
+    if clean_tags:
+        # Batch encode all ban tags at once (faster!)
+        try:
+            encoded = model.encode(clean_tags, show_progress_bar=False)
+            for i, tag in enumerate(original_tags):
+                embeddings[tag] = encoded[i]
+        except Exception as e:
+            print(f"[TIPO nobin custom] Error encoding ban tags: {e}")
+
+    # Cache the result
+    _BAN_TAG_EMBEDDINGS_CACHE[cache_key] = embeddings
+
+    return embeddings
+
 
 def get_tipo_class():
     """Lazy load TIPO class when first needed"""
@@ -150,38 +203,71 @@ def compute_similarity(text1: str, text2: str, model) -> float:
         return 0.0
 
 
-def is_related_to_ban_tags(word: str, ban_tags: List[str], model) -> Tuple[bool, str, float]:
+def is_related_to_ban_tags_batch(
+    words: List[str],
+    ban_tag_embeddings: dict,
+    model
+) -> dict:
     """
-    Check if a word is semantically related to any ban tag
+    Check if words are semantically related to any ban tag (batch processing)
+
+    Args:
+        words: List of words to check
+        ban_tag_embeddings: Pre-computed ban tag embeddings
+        model: Semantic model
 
     Returns:
-        (is_related, matched_ban_tag, similarity_score)
+        dict: {word: (is_related, matched_ban_tag, similarity_score)}
     """
-    if not model or not ban_tags:
-        return False, "", 0.0
+    if not model or not words or not ban_tag_embeddings:
+        return {word: (False, "", 0.0) for word in words}
 
-    word_clean = word.strip().lower()
+    results = {}
 
-    for ban_tag in ban_tags:
-        # Skip empty tags
-        if not ban_tag.strip():
-            continue
+    # Clean words
+    word_clean_map = {}
+    clean_words = []
+    for word in words:
+        cleaned = word.strip().lower()
+        if cleaned:
+            word_clean_map[word] = cleaned
+            clean_words.append(cleaned)
 
-        # Remove regex syntax for semantic comparison
-        ban_clean = ban_tag.strip()
-        ban_clean = re.sub(r'[\.\*\+\?\[\]\(\)\{\}\^\$\|\\]', ' ', ban_clean)
-        ban_clean = ' '.join(ban_clean.split()).lower()
+    if not clean_words:
+        return {word: (False, "", 0.0) for word in words}
 
-        if not ban_clean:
-            continue
+    try:
+        # Batch encode all words at once (faster!)
+        word_embeddings = model.encode(clean_words, show_progress_bar=False)
 
-        # Compute similarity
-        similarity = compute_similarity(word_clean, ban_clean, model)
+        # Check each word against ban tags
+        for i, word in enumerate(words):
+            if word not in word_clean_map:
+                results[word] = (False, "", 0.0)
+                continue
 
-        if similarity >= SEMANTIC_THRESHOLD:
-            return True, ban_tag, similarity
+            word_embedding = word_embeddings[i]
+            max_similarity = 0.0
+            matched_tag = ""
 
-    return False, "", 0.0
+            # Compare against all ban tag embeddings
+            for ban_tag, ban_embedding in ban_tag_embeddings.items():
+                similarity = float(np.dot(word_embedding, ban_embedding) / (
+                    np.linalg.norm(word_embedding) * np.linalg.norm(ban_embedding)
+                ))
+
+                if similarity > max_similarity:
+                    max_similarity = similarity
+                    matched_tag = ban_tag
+
+            is_related = max_similarity >= SEMANTIC_THRESHOLD
+            results[word] = (is_related, matched_tag, max_similarity)
+
+    except Exception as e:
+        print(f"[TIPO nobin custom] Error in batch similarity: {e}")
+        results = {word: (False, "", 0.0) for word in words}
+
+    return results
 
 
 def filter_generated_content(
@@ -193,6 +279,7 @@ def filter_generated_content(
 ) -> Tuple[str, List[Tuple[str, str, float]]]:
     """
     Filter only the content ADDED by TIPO, keep original input intact
+    Uses regex for tags and semantic similarity for natural language
 
     Args:
         original_input: Original user input (tags + nl_prompt)
@@ -204,54 +291,120 @@ def filter_generated_content(
     Returns:
         (filtered_output, excluded_words_list)
     """
-    if not tipo_output or not model:
+    if not tipo_output:
         return tipo_output, []
 
-    # Normalize inputs for comparison
-    original_clean = ' '.join(original_input.split())
-    output_clean = ' '.join(tipo_output.split())
+    # Split output into tags and natural language
+    # Typical format: "tags, tags, tags\nnatural language text"
+    lines = tipo_output.split('\n', 1)
 
-    # Try to identify what TIPO added
-    # Simple approach: if output contains original, extract the difference
-    if original_clean in output_clean:
-        # Find where original ends
-        idx = output_clean.find(original_clean)
-        if idx == 0:
-            # Original is at the beginning
-            generated_part = output_clean[len(original_clean):].strip()
-            prefix = original_clean
-            suffix = ""
-        else:
-            # Original is in the middle or end
-            prefix = output_clean[:idx].strip()
-            generated_part = output_clean[idx + len(original_clean):].strip()
-            suffix = ""
+    if len(lines) == 2:
+        tags_part, nl_part = lines
     else:
-        # Can't find exact match, filter the whole output
-        # This shouldn't happen, but fallback
-        if show_log:
-            print("[TIPO nobin custom] Warning: Could not identify original input in output")
-        prefix = ""
-        generated_part = output_clean
-        suffix = ""
+        # All tags, no natural language
+        tags_part = lines[0]
+        nl_part = ""
+
+    # Protect original input
+    original_clean = ' '.join(original_input.split())
+
+    # Extract generated tags (what TIPO added)
+    if original_clean in tags_part:
+        idx = tags_part.find(original_clean)
+        if idx == 0:
+            generated_tags = tags_part[len(original_clean):].strip().lstrip(',').strip()
+            original_tags = original_clean
+        else:
+            original_tags = tags_part[:idx + len(original_clean)].strip()
+            generated_tags = tags_part[idx + len(original_clean):].strip().lstrip(',').strip()
+    else:
+        # Can't find exact match
+        original_tags = ""
+        generated_tags = tags_part
 
     if show_log:
-        print(f"[TIPO nobin custom] Original input (protected): {len(original_clean)} chars")
-        print(f"[TIPO nobin custom] Generated content (filtering): {len(generated_part)} chars")
+        print(f"[TIPO nobin custom] Original input (protected): {len(original_tags)} chars")
+        print(f"[TIPO nobin custom] Generated tags (regex filtering): {generated_tags[:100] if generated_tags else 'none'}...")
+        print(f"[TIPO nobin custom] Generated NL (semantic filtering): {nl_part[:100] if nl_part else 'none'}...")
 
-    # Filter only the generated part
-    filtered_generated, excluded = filter_natural_language(
-        generated_part,
-        ban_tags,
-        model,
-        show_log
-    )
+    # Filter generated tags with regex
+    filtered_tags, excluded_tags = filter_tags_regex(generated_tags, ban_tags, show_log)
 
-    # Reconstruct: original + filtered generated
-    parts = [p for p in [prefix, original_clean, filtered_generated, suffix] if p]
-    filtered_output = ' '.join(parts)
+    # Filter natural language with semantic similarity
+    excluded_words = []
+    filtered_nl = nl_part
 
-    return filtered_output, excluded
+    if nl_part and model:
+        filtered_nl, excluded_words = filter_natural_language(
+            nl_part,
+            ban_tags,
+            model,
+            show_log
+        )
+
+    # Reconstruct output
+    result_parts = []
+    if original_tags:
+        result_parts.append(original_tags)
+    if filtered_tags:
+        result_parts.append(filtered_tags)
+
+    if result_parts:
+        tags_result = ', '.join(result_parts)
+    else:
+        tags_result = ""
+
+    if tags_result and filtered_nl:
+        filtered_output = f"{tags_result}\n{filtered_nl}"
+    elif tags_result:
+        filtered_output = tags_result
+    elif filtered_nl:
+        filtered_output = filtered_nl
+    else:
+        filtered_output = ""
+
+    return filtered_output, excluded_words
+
+
+def filter_tags_regex(tags_text: str, ban_tags: List[str], show_log: bool = True) -> Tuple[str, List[str]]:
+    """
+    Filter tags using regex patterns
+
+    Args:
+        tags_text: Comma-separated tags
+        ban_tags: List of regex patterns
+        show_log: Show filtering logs
+
+    Returns:
+        (filtered_tags, excluded_tags)
+    """
+    if not tags_text or not ban_tags:
+        return tags_text, []
+
+    tags = [tag.strip() for tag in tags_text.split(',') if tag.strip()]
+    filtered_tags = []
+    excluded_tags = []
+
+    for tag in tags:
+        excluded = False
+        for ban_pattern in ban_tags:
+            if not ban_pattern.strip():
+                continue
+            try:
+                if re.search(ban_pattern, tag, re.IGNORECASE):
+                    excluded_tags.append(tag)
+                    if show_log:
+                        print(f"[TIPO nobin custom] Excluded tag: '{tag}' (matched '{ban_pattern}')")
+                    excluded = True
+                    break
+            except re.error:
+                # Invalid regex, skip
+                pass
+
+        if not excluded:
+            filtered_tags.append(tag)
+
+    return ', '.join(filtered_tags), excluded_tags
 
 
 def filter_natural_language(
@@ -261,7 +414,7 @@ def filter_natural_language(
     show_log: bool = True
 ) -> Tuple[str, List[Tuple[str, str, float]]]:
     """
-    Filter natural language text to remove semantically related words
+    Filter natural language text to remove semantically related words (optimized with batching)
 
     Returns:
         (filtered_text, excluded_words_list)
@@ -270,20 +423,45 @@ def filter_natural_language(
     if not nl_text or not model:
         return nl_text, []
 
+    # Get ban tag embeddings (cached!)
+    ban_tag_embeddings = get_ban_tag_embeddings(ban_tags, model)
+
+    if not ban_tag_embeddings:
+        return nl_text, []
+
     excluded = []
     words = nl_text.split()
-    filtered_words = []
+
+    # Clean words
+    word_map = {}  # original_word -> cleaned_word
+    words_to_check = []
 
     for word in words:
-        # Clean word (remove punctuation for checking)
         word_clean = re.sub(r'[^\w\s-]', '', word)
+        if word_clean:
+            word_map[word] = word_clean
+            words_to_check.append(word_clean)
 
-        if not word_clean:
+    if not words_to_check:
+        return nl_text, []
+
+    # Batch check all words
+    similarity_results = is_related_to_ban_tags_batch(
+        words_to_check,
+        ban_tag_embeddings,
+        model
+    )
+
+    # Filter based on results
+    filtered_words = []
+    for word in words:
+        if word not in word_map:
             filtered_words.append(word)
             continue
 
-        is_related, matched_tag, similarity = is_related_to_ban_tags(
-            word_clean, ban_tags, model
+        word_clean = word_map[word]
+        is_related, matched_tag, similarity = similarity_results.get(
+            word_clean, (False, "", 0.0)
         )
 
         if is_related:
@@ -384,8 +562,8 @@ class TIPONobinCustom:
                 "seed": ("INT", {"default": 1234}),
                 "device": (["cpu", "cuda"], {"default": "cuda"}),
                 # Semantic filtering options
-                "minimum_keyword_count": ("INT", {"default": 5, "min": 1, "max": 50}),
-                "max_regeneration_attempts": ("INT", {"default": 10, "min": 1, "max": 50}),
+                "minimum_keyword_count": ("INT", {"default": 3, "min": 1, "max": 50}),
+                "max_regeneration_attempts": ("INT", {"default": 4, "min": 1, "max": 50}),
                 "show_filtering_log": ("BOOLEAN", {"default": True}),
                 "enable_semantic_filtering": ("BOOLEAN", {"default": True}),
             },
