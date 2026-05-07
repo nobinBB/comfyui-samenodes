@@ -279,10 +279,14 @@ def filter_generated_content(
 ) -> Tuple[str, List[Tuple[str, str, float]]]:
     """
     Filter only the content ADDED by TIPO, keep original input intact
+
+    IMPORTANT: Original user input is NEVER filtered, even if it matches ban tags
+    Only TIPO's generated additions are filtered
+
     Uses regex for tags and semantic similarity for natural language
 
     Args:
-        original_input: Original user input (tags + nl_prompt)
+        original_input: Original user input (tags + nl_prompt) - PROTECTED
         tipo_output: TIPO's full output (original + generated)
         ban_tags: List of ban tag patterns
         model: Semantic model
@@ -294,76 +298,97 @@ def filter_generated_content(
     if not tipo_output:
         return tipo_output, []
 
-    # Split output into tags and natural language
-    # Typical format: "tags, tags, tags\nnatural language text"
-    lines = tipo_output.split('\n', 1)
-
-    if len(lines) == 2:
-        tags_part, nl_part = lines
-    else:
-        # All tags, no natural language
-        tags_part = lines[0]
-        nl_part = ""
-
-    # Protect original input
-    original_clean = ' '.join(original_input.split())
-
-    # Extract generated tags (what TIPO added)
-    if original_clean in tags_part:
-        idx = tags_part.find(original_clean)
-        if idx == 0:
-            generated_tags = tags_part[len(original_clean):].strip().lstrip(',').strip()
-            original_tags = original_clean
-        else:
-            original_tags = tags_part[:idx + len(original_clean)].strip()
-            generated_tags = tags_part[idx + len(original_clean):].strip().lstrip(',').strip()
-    else:
-        # Can't find exact match
-        original_tags = ""
-        generated_tags = tags_part
+    # Normalize original input for matching
+    original_normalized = original_input.strip()
 
     if show_log:
-        print(f"[TIPO nobin custom] Original input (protected): {len(original_tags)} chars")
-        print(f"[TIPO nobin custom] Generated tags (regex filtering): {generated_tags[:100] if generated_tags else 'none'}...")
-        print(f"[TIPO nobin custom] Generated NL (semantic filtering): {nl_part[:100] if nl_part else 'none'}...")
+        print(f"[TIPO nobin custom] Original input (PROTECTED): '{original_normalized[:100]}...'")
+
+    # Find what TIPO added by removing original input from output
+    # TIPO typically appends to the original input
+    if original_normalized in tipo_output:
+        # Find where original input appears
+        idx = tipo_output.find(original_normalized)
+
+        # Everything after original input is generated content
+        generated_part = tipo_output[idx + len(original_normalized):].strip()
+
+        # Remove leading comma/separator if present
+        generated_part = generated_part.lstrip(',').lstrip('\n').strip()
+
+        if show_log:
+            print(f"[TIPO nobin custom] Generated content (will filter): '{generated_part[:100]}...'")
+    else:
+        # Can't find exact match - fallback: filter everything (not ideal)
+        if show_log:
+            print("[TIPO nobin custom] Warning: Could not find original input in output, filtering all")
+        generated_part = tipo_output
+        original_normalized = ""
+
+    # If no generated content, just return original
+    if not generated_part:
+        return original_normalized, []
+
+    # Split generated content into tags and natural language
+    # Format is usually: "tags, tags, tags\nnatural language"
+    if '\n' in generated_part:
+        generated_tags, generated_nl = generated_part.split('\n', 1)
+    else:
+        # All tags, no NL
+        generated_tags = generated_part
+        generated_nl = ""
 
     # Filter generated tags with regex
-    filtered_tags, excluded_tags = filter_tags_regex(generated_tags, ban_tags, show_log)
+    filtered_tags_excluded = []
+    if generated_tags:
+        filtered_generated_tags, filtered_tags_excluded = filter_tags_regex(
+            generated_tags,
+            ban_tags,
+            show_log
+        )
+    else:
+        filtered_generated_tags = ""
 
-    # Filter natural language with semantic similarity
-    excluded_words = []
-    filtered_nl = nl_part
-
-    if nl_part and model:
-        filtered_nl, excluded_words = filter_natural_language(
-            nl_part,
+    # Filter generated natural language with semantic similarity
+    excluded_nl = []
+    if generated_nl and model:
+        filtered_generated_nl, excluded_nl = filter_natural_language(
+            generated_nl,
             ban_tags,
             model,
             show_log
         )
+    else:
+        filtered_generated_nl = generated_nl
 
-    # Reconstruct output
+    # Reconstruct: original (protected) + filtered generated
     result_parts = []
-    if original_tags:
-        result_parts.append(original_tags)
-    if filtered_tags:
-        result_parts.append(filtered_tags)
 
-    if result_parts:
-        tags_result = ', '.join(result_parts)
+    # Always include original input first (never filtered!)
+    if original_normalized:
+        result_parts.append(original_normalized)
+
+    # Add filtered generated tags
+    if filtered_generated_tags:
+        result_parts.append(filtered_generated_tags)
+
+    # Join tags with comma
+    if len(result_parts) > 0:
+        tags_output = ', '.join(result_parts)
     else:
-        tags_result = ""
+        tags_output = ""
 
-    if tags_result and filtered_nl:
-        filtered_output = f"{tags_result}\n{filtered_nl}"
-    elif tags_result:
-        filtered_output = tags_result
-    elif filtered_nl:
-        filtered_output = filtered_nl
+    # Add filtered NL
+    if tags_output and filtered_generated_nl:
+        final_output = f"{tags_output}\n{filtered_generated_nl}"
+    elif tags_output:
+        final_output = tags_output
+    elif filtered_generated_nl:
+        final_output = filtered_generated_nl
     else:
-        filtered_output = ""
+        final_output = ""
 
-    return filtered_output, excluded_words
+    return final_output, excluded_nl
 
 
 def filter_tags_regex(tags_text: str, ban_tags: List[str], show_log: bool = True) -> Tuple[str, List[str]]:
