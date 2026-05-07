@@ -184,7 +184,74 @@ def is_related_to_ban_tags(word: str, ban_tags: List[str], model) -> Tuple[bool,
     return False, "", 0.0
 
 
-def filter_natural_language(
+def filter_generated_content(
+    original_input: str,
+    tipo_output: str,
+    ban_tags: List[str],
+    model,
+    show_log: bool = True
+) -> Tuple[str, List[Tuple[str, str, float]]]:
+    """
+    Filter only the content ADDED by TIPO, keep original input intact
+
+    Args:
+        original_input: Original user input (tags + nl_prompt)
+        tipo_output: TIPO's full output (original + generated)
+        ban_tags: List of ban tag patterns
+        model: Semantic model
+        show_log: Show filtering logs
+
+    Returns:
+        (filtered_output, excluded_words_list)
+    """
+    if not tipo_output or not model:
+        return tipo_output, []
+
+    # Normalize inputs for comparison
+    original_clean = ' '.join(original_input.split())
+    output_clean = ' '.join(tipo_output.split())
+
+    # Try to identify what TIPO added
+    # Simple approach: if output contains original, extract the difference
+    if original_clean in output_clean:
+        # Find where original ends
+        idx = output_clean.find(original_clean)
+        if idx == 0:
+            # Original is at the beginning
+            generated_part = output_clean[len(original_clean):].strip()
+            prefix = original_clean
+            suffix = ""
+        else:
+            # Original is in the middle or end
+            prefix = output_clean[:idx].strip()
+            generated_part = output_clean[idx + len(original_clean):].strip()
+            suffix = ""
+    else:
+        # Can't find exact match, filter the whole output
+        # This shouldn't happen, but fallback
+        if show_log:
+            print("[TIPO nobin custom] Warning: Could not identify original input in output")
+        prefix = ""
+        generated_part = output_clean
+        suffix = ""
+
+    if show_log:
+        print(f"[TIPO nobin custom] Original input (protected): {len(original_clean)} chars")
+        print(f"[TIPO nobin custom] Generated content (filtering): {len(generated_part)} chars")
+
+    # Filter only the generated part
+    filtered_generated, excluded = filter_natural_language(
+        generated_part,
+        ban_tags,
+        model,
+        show_log
+    )
+
+    # Reconstruct: original + filtered generated
+    parts = [p for p in [prefix, original_clean, filtered_generated, suffix] if p]
+    filtered_output = ' '.join(parts)
+
+    return filtered_output, excluded
     nl_text: str,
     ban_tags: List[str],
     model,
@@ -410,6 +477,9 @@ class TIPONobinCustom:
         # Create TIPO instance and call it
         tipo_instance = TIPO()
 
+        # Store original user input (to protect from filtering)
+        original_user_input = f"{tags} {nl_prompt}".strip()
+
         # Apply semantic filtering with regeneration
         regeneration_count = 0
         current_seed = seed
@@ -428,7 +498,7 @@ class TIPONobinCustom:
                 seed=current_seed,
                 tag_length=tag_length,
                 nl_length=nl_length,
-                ban_tags=ban_tags,
+                ban_tags=ban_tags,  # Pass ban_tags to TIPO (TIPO uses it)
                 format=format,
                 temperature=temperature,
                 top_p=top_p,
@@ -444,7 +514,9 @@ class TIPONobinCustom:
 
             # Apply semantic filtering if enabled
             if enable_semantic_filtering and model:
-                filtered_output, excluded = filter_natural_language(
+                # Filter only TIPO's generated content, keep original input
+                filtered_output, excluded = filter_generated_content(
+                    original_user_input,
                     formatted_prompt,
                     ban_tag_list,
                     model,
@@ -453,11 +525,11 @@ class TIPONobinCustom:
 
                 all_excluded.extend(excluded)
 
-                # Check keyword count
-                keyword_count = count_keywords(filtered_output)
+                # Check keyword count (count only in generated part)
+                keyword_count = count_keywords(filtered_output) - count_keywords(original_user_input)
 
                 if show_filtering_log:
-                    print(f"[TIPO nobin custom] Attempt {attempt + 1}: {keyword_count} keywords")
+                    print(f"[TIPO nobin custom] Attempt {attempt + 1}: {keyword_count} new keywords after filtering")
 
                 if keyword_count >= minimum_keyword_count:
                     break
