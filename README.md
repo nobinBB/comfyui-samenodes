@@ -27,6 +27,7 @@ ComfyUIのワークフローを強化する、文字列変換、バッチ処理�
 
 ### LoRA管理
 - **LoRA Wildcard Generator**: Civitaiメタデータから自動的にYAMLワイルドカードを生成
+- **LoRA Wildcard Generator V2**: V2構文版（`<lora:` → `=lora:`、トリガー `{trigger}` → `<!trigger!>`）
 - **Civitai LoRA Searcher**: SHA256でCivitai APIを検索（JSONフォルダ一括処理）
 - **LoRA to Civitai URL**: LoRA構文からCivitai URLを取得
 
@@ -34,11 +35,18 @@ ComfyUIのワークフローを強化する、文字列変換、バッチ処理�
 - **Embedding Wildcard Generator**: Embeddingファイルから自動的にYAMLワイルドカードを生成
 - **Embedding Path Resolver**: `embedding:name` を `embedding:path/name` に自動解決
 
+### TIPO（z-tipo-extension拡張）
+- **TIPO nobin custom**: セマンティック類似度でban tag除外（正規表現対応、再生成機能付き）
+
 ### ユーティリティ
 - **Get ComfyUI Input Path**: ComfyUIの入力ディレクトリパスを取得
 - **Seed Step N**: divisorの倍数ごとにseedを進める（永続カウント、独立インスタンス）
+- **Impact Wildcard Processor Seed**: Impact Pack拡張版（seed管理機能付き）
 
-これらのノードは、特にLoRAモデル、Embedding、ワイルドカード、プロンプト、バッチ操作、画像処理、パス管理、シード制御を扱う際に、ComfyUIのワークフローを効率化するよう設計されています。
+### TIPO拡張
+- **TIPO nobin custom**: TIPOにセマンティック類似度フィルタを追加（ban tag除外、再生成機能）
+
+これらのノードは、特にLoRAモデル、Embedding、ワイルドカード、プロンプト、TIPO拡張、バッチ操作、画像処理、パス管理、シード制御を扱う際に、ComfyUIのワークフローを効率化するよう設計されています。
 
 ---
 
@@ -62,7 +70,26 @@ cd comfyui-samenodes
 pip install -r requirements.txt
 ```
 
-### ステップ3: 環境設定（Civitai Bulk Downloader用）
+### ステップ3: z-tipo-extension のインストール（TIPO nobin custom用）
+
+TIPO nobin customノードを使用する場合：
+
+1. z-tipo-extensionをインストール：
+   ```bash
+   cd ComfyUI/custom_nodes
+   git clone https://github.com/KohakuBlueleaf/z-tipo-extension.git
+   ```
+
+2. z-tipo-extensionの依存関係をインストール：
+   ```bash
+   cd z-tipo-extension
+   pip install -r requirements.txt
+   cd ..
+   ```
+
+**注意:** z-tipo-extensionなしでも他のノードは正常に動作します。
+
+### ステップ4: 環境設定（Civitai Bulk Downloader用）
 
 Civitai Bulk Downloaderノードを使用する場合：
 
@@ -73,7 +100,7 @@ Civitai Bulk Downloaderノードを使用する場合：
 
 2. `.env` ファイルを編集してCivitai APIキーを追加（詳細は[Civitai Bulk Downloaderのセットアップ](#civitai-bulk-downloaderのセットアップ)を参照）
 
-### ステップ4: ComfyUIを再起動
+### ステップ5: ComfyUIを再起動
 
 ComfyUIを再起動して新しいノードを読み込みます。
 
@@ -97,6 +124,7 @@ ComfyUIを再起動して新しいノードを読み込みます。
 
 ### LoRA管理
 - **LoRA Wildcard Generator** - CivitaiメタデータからYAMLワイルドカード生成
+- **LoRA Wildcard Generator V2** - V2構文版（`=lora:`、`<!trigger!>`）
 - **LoRA Text Dual Input** - LoRAテキストの二重入力
 - **LoRA Tag Power Loader Extended** - 拡張LoRAタグパワーローダー
 - **Civitai LoRA Searcher** - SHA256でCivitai検索（JSONフォルダ一括）
@@ -106,9 +134,13 @@ ComfyUIを再起動して新しいノードを読み込みます。
 - **Embedding Wildcard Generator** - EmbeddingファイルからYAMLワイルドカード生成
 - **Embedding Path Resolver** - `embedding:name` を `embedding:path/name` に自動解決
 
+### TIPO
+- **TIPO nobin custom** - ban tagセマンティック除外（z-tipo拡張）
+
 ### ユーティリティ
 - **Get ComfyUI Input Path** - ComfyUIの入力ディレクトリパスを取得
 - **Seed Step N** - divisorの倍数ごとにseedを進める（永続カウント）
+- **Impact Wildcard Processor Seed** - Impact Pack拡張（seed管理）
 
 ---
 
@@ -1448,6 +1480,232 @@ Copyright (c) 2024 nobinBB (SD Prompt Saver Optimized modifications)
 
 ---
 
+### 18. TIPO nobin custom
+
+z-tipo-extensionを拡張したノード。セマンティック類似度を使用してban tagに関連するキーワードを除外します。
+
+#### 必須条件
+
+- **z-tipo-extension**: ComfyUIの `custom_nodes` フォルダに [z-tipo-extension](https://github.com/KohakuBlueleaf/z-tipo-extension) をインストール
+- **sentence-transformers**: `pip install sentence-transformers`（requirements.txtに含まれています）
+
+#### 入力
+
+**TIPO標準パラメータ:**
+- **tags** (STRING, multiline): 入力タグ
+- **nl_prompt** (STRING, multiline): 自然言語プロンプト
+- **ban_tags** (STRING, multiline): 除外タグ（カンマ区切り、正規表現対応）
+- **tipo_model** (COMBO): TIPOモデル選択
+- **format** (STRING, multiline): 出力フォーマット
+- **width** / **height** (INT): 画像サイズ
+- **temperature** / **top_p** / **min_p** / **top_k**: LLMパラメータ
+- **tag_length** / **nl_length**: 生成長（very_short / short / long / very_long）
+- **seed** (INT): シード値
+- **device** (COMBO): 実行デバイス（cpu / cuda）
+
+**セマンティックフィルタリングパラメータ:**
+- **minimum_keyword_count** (INT): 最小キーワード数（デフォルト: 3）
+  - フィルタ後のTIPO追加分がこの数値未満の場合、再生成
+- **max_regeneration_attempts** (INT): 最大再生成回数（デフォルト: 4）
+- **show_filtering_log** (BOOLEAN): フィルタリングログ表示（デフォルト: True）
+- **enable_semantic_filtering** (BOOLEAN): セマンティックフィルタリング有効化（デフォルト: True）
+
+#### 出力
+
+- **filtered_output** (STRING): フィルタ適用後の出力
+- **original_output** (STRING): TIPOの元の出力
+- **regeneration_count** (INT): 再生成回数
+- **excluded_words** (STRING): 除外された単語リスト
+
+#### 機能
+
+- ✅ **オリジナル入力保護**: `tags` と `nl_prompt` の内容は絶対にフィルタされない
+- ✅ **セマンティック類似度**: ban tagと意味的に類似する単語を自動除外（閾値: 0.5）
+- ✅ **正規表現対応**: ban tagに正規表現を使用可能（例: `.*hair.*`, `.*multiple.*`）
+- ✅ **タグと自然言語の分離処理**:
+  - タグ部分: 正規表現フィルタ
+  - 自然言語部分: セマンティック類似度フィルタ
+- ✅ **自動再生成**: フィルタ後のキーワード数が不足の場合、自動で再生成
+- ✅ **パフォーマンス最適化**:
+  - 初回実行: やや時間がかかる（モデル読み込み）
+  - 2回目以降: 高速化（embedding キャッシュ、10倍高速化）
+  - バッチ処理: 単語を一括で類似度計算（5倍高速化）
+
+#### 処理例
+
+**入力:**
+```
+tags: "1girl, red hair"
+nl_prompt: ""
+ban_tags: ".*hair.*,.*multiple.*"
+minimum_keyword_count: 3
+```
+
+**TIPOの出力:**
+```
+1girl, red hair, long hair, flowing hair, beautiful dress, elegant pose
+A girl with beautiful hair standing gracefully in a garden
+```
+
+**フィルタ後の出力:**
+```
+1girl, red hair, beautiful dress, elegant pose
+A girl standing gracefully in a garden
+```
+
+**除外された内容:**
+- タグ: `long hair`, `flowing hair`（正規表現 `.*hair.*` にマッチ）
+- 自然言語: `beautiful hair`（セマンティック類似度 > 0.5）
+
+**重要:** `red hair` は元の入力なので保護され、除外されません。
+
+#### 使用例
+
+```
+[Text Input] tags: "1girl, red hair"
+[Text Input] nl_prompt: ""
+[Text Input] ban_tags: ".*hair.*,.*multiple.*"
+      ↓
+[TIPO nobin custom]
+  tipo_model: kohaku-xl-delta-rev2
+  minimum_keyword_count: 3
+  max_regeneration_attempts: 4
+  enable_semantic_filtering: True
+      ↓
+  filtered_output: "1girl, red hair, beautiful dress, elegant pose..."
+  original_output: "1girl, red hair, long hair, flowing hair..."
+  regeneration_count: 0
+  excluded_words: "long hair (similar to '.*hair.*', score: 0.85)
+                   flowing hair (similar to '.*hair.*', score: 0.82)
+                   ..."
+```
+
+#### ライセンスと帰属
+
+**TIPO nobin custom:**
+```
+Based on z-tipo-extension by KohakuBlueleaf
+Copyright (c) 2024 KBlueLeaf (z-tipo-extension)
+Copyright (c) 2024 nobinBB (TIPO nobin custom modifications)
+License: Apache License 2.0
+```
+
+**z-tipo-extension:**
+- プロジェクト: [KohakuBlueleaf/z-tipo-extension](https://github.com/KohakuBlueleaf/z-tipo-extension)
+- ライセンス: Apache License 2.0
+
+本ノードは z-tipo-extension を**ライブラリとして使用**しており、直接的な改変は行っていません。
+
+---
+
+### 19. LoRA Wildcard Generator V2
+
+V1の構文を変更したバージョン。`all-{wildcard_name}` エントリなし、新しいLoRA構文を使用。
+
+#### V1からの変更点
+
+- ❌ **削除**: `all-{wildcard_name}` エントリ（ランダム選択用）
+- 🔄 **変更**: LoRA構文 `<lora:name:weight>` → `=lora:name@weight=`
+- 🔄 **変更**: トリガー構文 `{trigger}` → `<!trigger!>`
+
+#### 入力
+
+- **json_folder** (STRING): Civitaiの `.json` メタデータファイルが含まれるフォルダのパス
+- **wildcard_name** (STRING): ワイルドカードの名前
+- **output_folder** (STRING): 生成されたYAMLファイルの出力フォルダパス
+
+#### 出力
+
+- **status** (STRING): 生成の詳細を含むステータスメッセージ
+- **entry_count** (INT): 生成されたLoRAエントリの数
+
+#### 生成されるYAMLフォーマット（V2）
+
+```yaml
+koma:
+  2koma_V3:
+  - =lora:2koma_V3@{0.4|0.5|0.6|0.7|0.8}= <!2koma, two views!>
+  3angles_fingering:
+  - =lora:3angles_fingering@{0.4|0.5|0.6|0.7|0.8}= <!3angles_fingering, 1girl, lying, cross-section, fingering!>
+  comic_style_cumshot:
+  - =lora:comic_style_cumshot@{0.4|0.5|0.6|0.7|0.8}= <!comic, cumshot, cum!>
+```
+
+**V1との比較:**
+```yaml
+# V1:
+<lora:2koma_V3:{0.4|0.5|0.6|0.7|0.8}>{2koma, two views}
+
+# V2:
+=lora:2koma_V3@{0.4|0.5|0.6|0.7|0.8}= <!2koma, two views!>
+```
+
+#### 使用例
+
+```
+json_folder: /models/lora/metadata/
+wildcard_name: my_loras_v2
+output_folder: /wildcards/
+
+結果:
+✓ Generated: /wildcards/my_loras_v2.yaml
+  Entries: 36
+```
+
+---
+
+### 20. Impact Wildcard Processor Seed
+
+Impact PackのWildcard Processorを拡張したノード。Seed Step N機能を統合。
+
+#### 必須条件
+
+- **ComfyUI-Impact-Pack**: [Impact Pack](https://github.com/ltdrdata/ComfyUI-Impact-Pack) をインストール
+
+#### 入力
+
+**Wildcard処理:**
+- **wildcard** (COMBO): ワイルドカード選択（Impact Packから読み込み）
+- **text** (STRING, multiline): 処理するテキスト
+- **populated_text** (STRING, optional): 事前展開済みテキスト
+- **mode** (BOOLEAN): モード切り替え
+
+**Seed管理:**
+- **Select to add Wildcard** (COMBO): ワイルドカードをテキストに追加
+- **seed** (INT): シード値
+- **divisor** (INT): 何回ごとにseed+1するか（Seed Step N機能）
+- **increment_amount** (INT): seedを進める量
+
+#### 出力
+
+- **text** (STRING): 展開後のテキスト
+- **populated_text** (STRING): 完全展開済みテキスト
+
+#### 機能
+
+- ✅ **Impact Pack統合**: Impact PackのWildcardシステムを使用
+- ✅ **Seed Step N機能**: divisorの倍数ごとにseedを進める
+- ✅ **永続カウント**: ComfyUI再起動後もカウントを保持
+- ✅ **リセットボタン**: ノード単位でカウントをリセット可能
+- ✅ **独立インスタンス**: 同じワークフロー内の複数ノードは別々にカウント
+
+#### 使用例
+
+```
+text: "__my_loras/all-my_loras__ 1girl, masterpiece"
+wildcard: my_loras/all-my_loras
+seed: 1000
+divisor: 4
+increment_amount: 1
+
+結果:
+1〜4枚目: seed 1000で展開
+5〜8枚目: seed 1001で展開
+9〜12枚目: seed 1002で展開
+```
+
+---
+
 ## プロジェクト構造
 
 ```
@@ -1459,6 +1717,7 @@ comfyui-samenodes/
 ├── image_format_converter.py        # Image Format Converterノードの実装
 ├── images_to_pdf.py                 # Images to PDFノードの実装
 ├── lora_wildcard_generator.py       # LoRA Wildcard Generatorノードの実装
+├── lora_wildcard_generator_v2.py    # LoRA Wildcard Generator V2ノードの実装
 ├── lora_to_civitai_url.py           # LoRA to Civitai URLノードの実装
 ├── civitai_lora_searcher.py         # Civitai LoRA Searcherノードの実装
 ├── embedding_wildcard_generator.py  # Embedding Wildcard Generatorノードの実装
@@ -1471,7 +1730,9 @@ comfyui-samenodes/
 ├── lora_text_dual_input.py          # LoRA Text Dual Inputノードの実装
 ├── lora_tag_power_loader_extended.py # LoRA Tag Power Loader Extendedノードの実装
 ├── seed_step_n.py                   # Seed Step Nノードの実装
-├── sd_prompt_saver_optimized.py     # SD Prompt Saver (Optimized)ノードの実装
+├── sd_prompt_saver_optimized_v2.py  # SD Prompt Saver (Optimized) V2ノードの実装
+├── impact_wildcard_processor_seed.py # Impact Wildcard Processor Seedノードの実装
+├── tipo_nobin_custom.py             # TIPO nobin customノードの実装
 ├── .env.example                     # Civitai API用の環境変数テンプレート
 ├── .env                             # 実際の環境変数（gitには含まれません）
 ├── .gitignore                       # Git ignoreルール（.envを除外）
@@ -1507,6 +1768,8 @@ comfyui-samenodes/
 - **python-dotenv** (≥1.0.0): APIキー用の環境変数管理
 - **pyyaml** (≥6.0): ワイルドカード生成用のYAMLファイル処理
 - **Pillow** (≥9.0.0): 画像処理とメタデータ抽出
+- **piexif** (≥1.1.3): JPEG/WebP EXIF メタデータ処理
+- **sentence-transformers** (≥2.2.0): セマンティック類似度計算（TIPO nobin custom用）
 
 すべての依存関係をインストール：
 ```bash
