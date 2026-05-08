@@ -36,7 +36,7 @@ ComfyUIのワークフローを強化する、文字列変換、バッチ処理�
 - **Embedding Path Resolver**: `embedding:name` を `embedding:path/name` に自動解決
 
 ### TIPO（z-tipo-extension拡張）
-- **TIPO nobin custom**: セマンティック類似度でban tag除外（正規表現対応、再生成機能付き）
+- **TIPO nobin custom**: TIPOの自然言語にban tag対応
 
 ### ユーティリティ
 - **Get ComfyUI Input Path**: ComfyUIの入力ディレクトリパスを取得
@@ -44,7 +44,7 @@ ComfyUIのワークフローを強化する、文字列変換、バッチ処理�
 - **Impact Wildcard Processor Seed**: Impact Pack拡張版（seed管理機能付き）
 
 ### TIPO拡張
-- **TIPO nobin custom**: TIPOにセマンティック類似度フィルタを追加（ban tag除外、再生成機能）
+- **TIPO nobin custom**: TIPOの自然言語にban tag対応
 
 これらのノードは、特にLoRAモデル、Embedding、ワイルドカード、プロンプト、TIPO拡張、バッチ操作、画像処理、パス管理、シード制御を扱う際に、ComfyUIのワークフローを効率化するよう設計されています。
 
@@ -135,7 +135,7 @@ ComfyUIを再起動して新しいノードを読み込みます。
 - **Embedding Path Resolver** - `embedding:name` を `embedding:path/name` に自動解決
 
 ### TIPO
-- **TIPO nobin custom** - ban tagセマンティック除外（z-tipo拡張）
+- **TIPO nobin custom** - TIPOの自然言語にban tag対応（z-tipo拡張）
 
 ### ユーティリティ
 - **Get ComfyUI Input Path** - ComfyUIの入力ディレクトリパスを取得
