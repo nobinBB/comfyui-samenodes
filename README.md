@@ -1506,9 +1506,16 @@ z-tipo-extensionを拡張したノード。セマンティック類似度を使�
 **セマンティックフィルタリングパラメータ:**
 - **minimum_keyword_count** (INT): 最小キーワード数（デフォルト: 3）
   - フィルタ後のTIPO追加分がこの数値未満の場合、再生成
-- **max_regeneration_attempts** (INT): 最大再生成回数（デフォルト: 4）
+  - 例: 3に設定すると、ban tag除外後に3個以上のキーワードが残る必要がある
+- **max_regeneration_attempts** (INT): 最大再生成回数（デフォルト: 4、範囲: 1-50）
+  - キーワード不足で再生成する最大回数
+  - 1回目の生成 + 最大4回の再生成 = 合計最大5回の試行
+  - 各試行でseedが+1される（seed, seed+1, seed+2, seed+3, seed+4）
+  - 途中で条件を満たせば、残りの試行はスキップ
 - **show_filtering_log** (BOOLEAN): フィルタリングログ表示（デフォルト: True）
+  - コンソールに除外された単語と類似度スコアを表示
 - **enable_semantic_filtering** (BOOLEAN): セマンティックフィルタリング有効化（デフォルト: True）
+  - Falseにすると通常のTIPOと同じ動作（ban tagフィルタなし）
 
 #### 出力
 
@@ -1558,6 +1565,45 @@ A girl standing gracefully in a garden
 - 自然言語: `beautiful hair`（セマンティック類似度 > 0.5）
 
 **重要:** `red hair` は元の入力なので保護され、除外されません。
+
+#### 再生成の動作例
+
+**設定:**
+```
+minimum_keyword_count: 3
+max_regeneration_attempts: 4
+ban_tags: ".*hair.*"
+seed: 1000
+```
+
+**試行の流れ:**
+
+```
+【試行1】seed=1000
+TIPOの追加: "long hair, flowing hair, smile"
+除外後: "smile" (1キーワード)
+判定: 1 < 3 → 再生成
+
+【試行2】seed=1001
+TIPOの追加: "long hair, beautiful"
+除外後: "beautiful" (1キーワード)
+判定: 1 < 3 → 再生成
+
+【試行3】seed=1002
+TIPOの追加: "beautiful, elegant, graceful"
+除外後: "beautiful, elegant, graceful" (3キーワード)
+判定: 3 >= 3 → 採用！✓
+
+→ regeneration_count = 2（2回再生成した）
+→ 試行4、試行5はスキップ
+```
+
+**もし全試行でキーワード不足の場合:**
+```
+【試行1-5】全てキーワード不足
+→ 最後の試行結果を採用（キーワード不足でも出力）
+→ regeneration_count = 4
+```
 
 #### 使用例
 
