@@ -513,12 +513,6 @@ def deduplicate_tags(tags_text: str) -> str:
     """
     Remove duplicate tags while preserving order
 
-    Args:
-        tags_text: Comma-separated tags
-
-    Returns:
-        Tags with duplicates removed (case-insensitive, keeps first occurrence)
-
     Example:
         Input: "1girl, standing, seiza, standing, seiza, armor"
         Output: "1girl, standing, seiza, armor"
@@ -543,55 +537,45 @@ def check_output_quality(output: str, input_tags: str, max_word_repetition: int 
     """
     Check output quality to detect broken/corrupted TIPO generations
 
-    Args:
-        output: TIPO output to check
-        input_tags: Original input tags
-        max_word_repetition: Maximum allowed repetitions of same word
+    Checks:
+        1. Excessive word repetition
+        2. Contradictory tags (1girl + no humans, solo + multiple)
+        3. Broken syntax (unescaped brackets)
 
     Returns:
-        (is_valid, reason) - True if output is valid, False with reason if invalid
-
-    Checks:
-        1. Excessive word repetition (same word appears too many times)
-        2. Contradictory tags (1girl + no humans, solo + multiple girls)
-        3. Broken syntax (brackets, malformed tags)
+        (is_valid, reason)
     """
     if not output:
         return (True, "")
 
     tags = [t.strip() for t in output.split(',') if t.strip()]
 
-    # Check 1: Excessive repetition (same word appears too many times)
+    # Check 1: Excessive repetition
     word_count = {}
     for tag in tags:
         words = tag.lower().split()
         for word in words:
-            if len(word) > 2:  # Only count meaningful words
+            if len(word) > 2:
                 word_count[word] = word_count.get(word, 0) + 1
                 if word_count[word] > max_word_repetition:
-                    return (False, f"Excessive repetition: '{word}' appears {word_count[word]} times (max: {max_word_repetition})")
+                    return (False, f"Excessive repetition: '{word}' appears {word_count[word]} times")
 
     # Check 2: Contradictory tags
     tags_lower = [t.lower() for t in tags]
-
-    # 1girl + no humans contradiction
     has_girl = any('girl' in t and 'no' not in t for t in tags_lower)
     has_no_humans = 'no humans' in tags_lower
     if has_girl and has_no_humans:
         return (False, "Contradiction: character tag + 'no humans'")
 
-    # solo + multiple contradiction
     has_solo = 'solo' in tags_lower
     has_multiple = any('multiple' in t for t in tags_lower)
     if has_solo and has_multiple:
         return (False, "Contradiction: 'solo' + 'multiple'")
 
     # Check 3: Broken syntax
-    # Check for stray brackets (not escaped)
     if '][' in output:
         return (False, "Broken syntax: '][' found")
 
-    # Count unescaped brackets
     unescaped_open = output.count('[') - output.count('\\[')
     unescaped_close = output.count(']') - output.count('\\]')
     if unescaped_open > 0 or unescaped_close > 0:
@@ -683,7 +667,6 @@ class TIPONobinCustom:
                 "show_filtering_log": ("BOOLEAN", {"default": True}),
                 "enable_semantic_filtering": ("BOOLEAN", {"default": True}),
                 "remove_duplicate_tags": ("BOOLEAN", {"default": True}),
-                # Quality check options
                 "enable_quality_check": ("BOOLEAN", {"default": True}),
                 "max_word_repetition": ("INT", {"default": 3, "min": 2, "max": 10}),
             },
@@ -793,6 +776,9 @@ class TIPONobinCustom:
 
         for attempt in range(max_regeneration_attempts):
             # Call original TIPO
+            # NOTE: Don't pass ban_tags to TIPO to avoid context window overflow
+            # (large ban_tags list consumes too many tokens in TIPO's prompt)
+            # We do our own ban_tag filtering after TIPO returns
             tipo_result = tipo_instance.execute(
                 tipo_model=tipo_model,
                 tags=tags,
@@ -802,7 +788,7 @@ class TIPONobinCustom:
                 seed=current_seed,
                 tag_length=tag_length,
                 nl_length=nl_length,
-                ban_tags=ban_tags,  # Pass ban_tags to TIPO (TIPO uses it)
+                ban_tags="",  # Empty - we filter ourselves to avoid token overflow
                 format=format,
                 temperature=temperature,
                 top_p=top_p,
