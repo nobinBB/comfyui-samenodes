@@ -776,9 +776,8 @@ class TIPONobinCustom:
 
         for attempt in range(max_regeneration_attempts):
             # Call original TIPO
-            # NOTE: Don't pass ban_tags to TIPO to avoid context window overflow
-            # (large ban_tags list consumes too many tokens in TIPO's prompt)
-            # We do our own ban_tag filtering after TIPO returns
+            # Pass ban_tags to TIPO so it can stop generation early when banned tags appear
+            # (without ban_tags, TIPO generates longer outputs that can overflow context)
             try:
                 tipo_result = tipo_instance.execute(
                     tipo_model=tipo_model,
@@ -789,7 +788,7 @@ class TIPONobinCustom:
                     seed=current_seed,
                     tag_length=tag_length,
                     nl_length=nl_length,
-                    ban_tags="",  # Empty - we filter ourselves to avoid token overflow
+                    ban_tags=ban_tags,  # Pass to TIPO for early stopping
                     format=format,
                     temperature=temperature,
                     top_p=top_p,
