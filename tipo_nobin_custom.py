@@ -776,26 +776,53 @@ class TIPONobinCustom:
 
         for attempt in range(max_regeneration_attempts):
             # Call original TIPO
-            # NOTE: Don't pass ban_tags to TIPO to avoid context window overflow
-            # (large ban_tags list consumes too many tokens in TIPO's prompt)
-            # We do our own ban_tag filtering after TIPO returns
-            tipo_result = tipo_instance.execute(
-                tipo_model=tipo_model,
-                tags=tags,
-                nl_prompt=nl_prompt,
-                width=width,
-                height=height,
-                seed=current_seed,
-                tag_length=tag_length,
-                nl_length=nl_length,
-                ban_tags="",  # Empty - we filter ourselves to avoid token overflow
-                format=format,
-                temperature=temperature,
-                top_p=top_p,
-                min_p=min_p,
-                top_k=top_k,
-                device=device,
-            )
+            # Pass ban_tags to TIPO so it can stop generation early when banned tags appear
+            # (without ban_tags, TIPO generates longer outputs that can overflow context)
+            try:
+                tipo_result = tipo_instance.execute(
+                    tipo_model=tipo_model,
+                    tags=tags,
+                    nl_prompt=nl_prompt,
+                    width=width,
+                    height=height,
+                    seed=current_seed,
+                    tag_length=tag_length,
+                    nl_length=nl_length,
+                    ban_tags=ban_tags,  # Pass to TIPO for early stopping
+                    format=format,
+                    temperature=temperature,
+                    top_p=top_p,
+                    min_p=min_p,
+                    top_k=top_k,
+                    device=device,
+                )
+            except ValueError as e:
+                # Handle TIPO context window overflow (1024 token limit)
+                error_msg = str(e)
+                if "context window" in error_msg or "exceed" in error_msg.lower():
+                    if show_filtering_log:
+                        print(f"\n[TIPO nobin custom] WARNING: TIPO context window overflow!")
+                        print(f"  Error: {error_msg}")
+                        print(f"  Cause: Input + generation exceeds TIPO's 1024 token limit")
+                        print(f"  Fallback: Returning original input without TIPO additions\n")
+                    # Return original input as-is (no TIPO additions)
+                    original_combined = tags
+                    if nl_prompt:
+                        original_combined = f"{tags}\n{nl_prompt}" if tags else nl_prompt
+                    filtered_output = original_combined
+                    original_output = original_combined
+                    # Apply dedup if enabled
+                    if remove_duplicate_tags:
+                        filtered_output = deduplicate_tags(filtered_output)
+                    return (
+                        filtered_output,
+                        original_output,
+                        regeneration_count,
+                        f"TIPO context overflow - returned original input. Reduce input length or use shorter tag_length/nl_length."
+                    )
+                else:
+                    # Re-raise other ValueErrors
+                    raise
 
             # Extract outputs from TIPO
             # TIPO returns: (formatted_prompt_by_tipo, formatted_prompt_by_user,
