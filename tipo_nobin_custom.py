@@ -509,6 +509,81 @@ def count_keywords(text: str) -> int:
     return len([w for w in words if len(w) > 2])
 
 
+def deduplicate_tags(tags_text: str) -> str:
+    """
+    Remove duplicate tags while preserving order
+
+    Example:
+        Input: "1girl, standing, seiza, standing, seiza, armor"
+        Output: "1girl, standing, seiza, armor"
+    """
+    if not tags_text:
+        return tags_text
+
+    tags = [tag.strip() for tag in tags_text.split(',') if tag.strip()]
+    seen = set()
+    unique_tags = []
+
+    for tag in tags:
+        tag_lower = tag.lower()
+        if tag_lower not in seen:
+            seen.add(tag_lower)
+            unique_tags.append(tag)
+
+    return ', '.join(unique_tags)
+
+
+def check_output_quality(output: str, input_tags: str, max_word_repetition: int = 3) -> Tuple[bool, str]:
+    """
+    Check output quality to detect broken/corrupted TIPO generations
+
+    Checks:
+        1. Excessive word repetition
+        2. Contradictory tags (1girl + no humans, solo + multiple)
+        3. Broken syntax (unescaped brackets)
+
+    Returns:
+        (is_valid, reason)
+    """
+    if not output:
+        return (True, "")
+
+    tags = [t.strip() for t in output.split(',') if t.strip()]
+
+    # Check 1: Excessive repetition
+    word_count = {}
+    for tag in tags:
+        words = tag.lower().split()
+        for word in words:
+            if len(word) > 2:
+                word_count[word] = word_count.get(word, 0) + 1
+                if word_count[word] > max_word_repetition:
+                    return (False, f"Excessive repetition: '{word}' appears {word_count[word]} times")
+
+    # Check 2: Contradictory tags
+    tags_lower = [t.lower() for t in tags]
+    has_girl = any('girl' in t and 'no' not in t for t in tags_lower)
+    has_no_humans = 'no humans' in tags_lower
+    if has_girl and has_no_humans:
+        return (False, "Contradiction: character tag + 'no humans'")
+
+    has_solo = 'solo' in tags_lower
+    has_multiple = any('multiple' in t for t in tags_lower)
+    if has_solo and has_multiple:
+        return (False, "Contradiction: 'solo' + 'multiple'")
+
+    # Check 3: Broken syntax
+    if '][' in output:
+        return (False, "Broken syntax: '][' found")
+
+    unescaped_open = output.count('[') - output.count('\\[')
+    unescaped_close = output.count(']') - output.count('\\]')
+    if unescaped_open > 0 or unescaped_close > 0:
+        return (False, "Broken syntax: unescaped brackets found")
+
+    return (True, "")
+
+
 class TIPONobinCustom:
     """
     TIPO with semantic ban tag filtering
@@ -591,6 +666,9 @@ class TIPONobinCustom:
                 "max_regeneration_attempts": ("INT", {"default": 4, "min": 1, "max": 50}),
                 "show_filtering_log": ("BOOLEAN", {"default": True}),
                 "enable_semantic_filtering": ("BOOLEAN", {"default": True}),
+                "remove_duplicate_tags": ("BOOLEAN", {"default": True}),
+                "enable_quality_check": ("BOOLEAN", {"default": True}),
+                "max_word_repetition": ("INT", {"default": 3, "min": 2, "max": 10}),
             },
         }
 
@@ -633,6 +711,9 @@ class TIPONobinCustom:
         max_regeneration_attempts: int,
         show_filtering_log: bool,
         enable_semantic_filtering: bool,
+        remove_duplicate_tags: bool = True,
+        enable_quality_check: bool = True,
+        max_word_repetition: int = 3,
     ):
         # Get TIPO class (lazy load)
         TIPO = get_tipo_class()
@@ -695,6 +776,9 @@ class TIPONobinCustom:
 
         for attempt in range(max_regeneration_attempts):
             # Call original TIPO
+            # NOTE: Don't pass ban_tags to TIPO to avoid context window overflow
+            # (large ban_tags list consumes too many tokens in TIPO's prompt)
+            # We do our own ban_tag filtering after TIPO returns
             tipo_result = tipo_instance.execute(
                 tipo_model=tipo_model,
                 tags=tags,
@@ -704,7 +788,7 @@ class TIPONobinCustom:
                 seed=current_seed,
                 tag_length=tag_length,
                 nl_length=nl_length,
-                ban_tags=ban_tags,  # Pass ban_tags to TIPO (TIPO uses it)
+                ban_tags="",  # Empty - we filter ourselves to avoid token overflow
                 format=format,
                 temperature=temperature,
                 top_p=top_p,
@@ -780,6 +864,17 @@ class TIPONobinCustom:
                     else:
                         filtered_output = tags_part
 
+                    # Quality check (if enabled)
+                    if enable_quality_check:
+                        is_valid, reason = check_output_quality(filtered_output, tags, max_word_repetition)
+                        if not is_valid:
+                            if show_filtering_log:
+                                print(f"[TIPO nobin custom] Quality check failed: {reason}")
+                                print(f"[TIPO nobin custom] Regenerating with seed {current_seed + 1}...")
+                            regeneration_count += 1
+                            current_seed += 1
+                            continue
+
                     # Count keywords in ADDED content only
                     addon_keyword_count = count_keywords(filtered_addon_tags) + count_keywords(filtered_addon_nl)
 
@@ -804,6 +899,18 @@ class TIPONobinCustom:
             else:
                 # No semantic filtering
                 filtered_output = formatted_by_tipo
+
+                # Quality check (if enabled)
+                if enable_quality_check:
+                    is_valid, reason = check_output_quality(filtered_output, tags, max_word_repetition)
+                    if not is_valid:
+                        if show_filtering_log:
+                            print(f"[TIPO nobin custom] Quality check failed: {reason}")
+                            print(f"[TIPO nobin custom] Regenerating with seed {current_seed + 1}...")
+                        regeneration_count += 1
+                        current_seed += 1
+                        continue
+
                 break
 
         # Format excluded words
@@ -811,6 +918,12 @@ class TIPONobinCustom:
             f"{word} (similar to '{tag}', score: {score:.3f})"
             for word, tag, score in all_excluded
         ])
+
+        # Remove duplicate tags if enabled
+        if remove_duplicate_tags:
+            filtered_output = deduplicate_tags(filtered_output)
+            if show_filtering_log:
+                print(f"[TIPO nobin custom] Duplicate tags removed")
 
         if show_filtering_log:
             print(f"\n{'='*60}")
