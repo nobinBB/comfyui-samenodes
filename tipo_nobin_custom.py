@@ -664,7 +664,7 @@ class TIPONobinCustom:
         max_regeneration_attempts: int,
         show_filtering_log: bool,
         enable_semantic_filtering: bool,
-        remove_duplicate_tags: bool,
+        remove_duplicate_tags: bool = True,
     ):
         # Get TIPO class (lazy load)
         TIPO = get_tipo_class()
