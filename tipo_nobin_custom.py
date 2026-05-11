@@ -509,6 +509,36 @@ def count_keywords(text: str) -> int:
     return len([w for w in words if len(w) > 2])
 
 
+def deduplicate_tags(tags_text: str) -> str:
+    """
+    Remove duplicate tags while preserving order
+
+    Args:
+        tags_text: Comma-separated tags
+
+    Returns:
+        Tags with duplicates removed (case-insensitive, keeps first occurrence)
+
+    Example:
+        Input: "1girl, standing, seiza, standing, seiza, armor"
+        Output: "1girl, standing, seiza, armor"
+    """
+    if not tags_text:
+        return tags_text
+
+    tags = [tag.strip() for tag in tags_text.split(',') if tag.strip()]
+    seen = set()
+    unique_tags = []
+
+    for tag in tags:
+        tag_lower = tag.lower()
+        if tag_lower not in seen:
+            seen.add(tag_lower)
+            unique_tags.append(tag)
+
+    return ', '.join(unique_tags)
+
+
 class TIPONobinCustom:
     """
     TIPO with semantic ban tag filtering
@@ -591,6 +621,7 @@ class TIPONobinCustom:
                 "max_regeneration_attempts": ("INT", {"default": 4, "min": 1, "max": 50}),
                 "show_filtering_log": ("BOOLEAN", {"default": True}),
                 "enable_semantic_filtering": ("BOOLEAN", {"default": True}),
+                "remove_duplicate_tags": ("BOOLEAN", {"default": True}),
             },
         }
 
@@ -633,6 +664,7 @@ class TIPONobinCustom:
         max_regeneration_attempts: int,
         show_filtering_log: bool,
         enable_semantic_filtering: bool,
+        remove_duplicate_tags: bool,
     ):
         # Get TIPO class (lazy load)
         TIPO = get_tipo_class()
@@ -811,6 +843,12 @@ class TIPONobinCustom:
             f"{word} (similar to '{tag}', score: {score:.3f})"
             for word, tag, score in all_excluded
         ])
+
+        # Remove duplicate tags if enabled
+        if remove_duplicate_tags:
+            filtered_output = deduplicate_tags(filtered_output)
+            if show_filtering_log:
+                print(f"[TIPO nobin custom] Duplicate tags removed")
 
         if show_filtering_log:
             print(f"\n{'='*60}")
