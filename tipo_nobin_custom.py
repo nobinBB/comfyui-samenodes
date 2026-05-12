@@ -533,6 +533,41 @@ def deduplicate_tags(tags_text: str) -> str:
     return ', '.join(unique_tags)
 
 
+def filter_character_tags_from_text(tags_text: str, show_log: bool = True) -> Tuple[str, List[str]]:
+    """
+    Filter character tags from comma-separated tags
+
+    Character tags typically follow the pattern: character_name_(series)
+    For example: "hatsune_miku_(vocaloid)", "asuna_(sao)"
+
+    Args:
+        tags_text: Comma-separated tags
+        show_log: Show filtering logs
+
+    Returns:
+        (filtered_tags, removed_character_tags)
+    """
+    if not tags_text:
+        return tags_text, []
+
+    tags = [tag.strip() for tag in tags_text.split(',') if tag.strip()]
+    filtered_tags = []
+    removed_tags = []
+
+    # Pattern: word_(word) - matches character tags like "character_name_(series)"
+    character_tag_pattern = re.compile(r'^[^_]+_\([^)]+\)$')
+
+    for tag in tags:
+        if character_tag_pattern.match(tag):
+            removed_tags.append(tag)
+            if show_log:
+                print(f"[TIPO nobin custom] Removed character tag: '{tag}'")
+        else:
+            filtered_tags.append(tag)
+
+    return ', '.join(filtered_tags), removed_tags
+
+
 def check_output_quality(output: str, input_tags: str, max_word_repetition: int = 3) -> Tuple[bool, str]:
     """
     Check output quality to detect broken/corrupted TIPO generations
@@ -669,15 +704,17 @@ class TIPONobinCustom:
                 "remove_duplicate_tags": ("BOOLEAN", {"default": True}),
                 "enable_quality_check": ("BOOLEAN", {"default": True}),
                 "max_word_repetition": ("INT", {"default": 3, "min": 2, "max": 10}),
+                "filter_character_tags": ("BOOLEAN", {"default": False}),
             },
         }
 
-    RETURN_TYPES = ("STRING", "STRING", "INT", "STRING")
+    RETURN_TYPES = ("STRING", "STRING", "INT", "STRING", "STRING")
     RETURN_NAMES = (
         "filtered_output",
         "original_output",
         "regeneration_count",
-        "excluded_words"
+        "excluded_words",
+        "removed_character_tags"
     )
     FUNCTION = "execute"
     CATEGORY = "SameNodes/TIPO"
@@ -714,6 +751,7 @@ class TIPONobinCustom:
         remove_duplicate_tags: bool = True,
         enable_quality_check: bool = True,
         max_word_repetition: int = 3,
+        filter_character_tags: bool = False,
     ):
         # Get TIPO class (lazy load)
         TIPO = get_tipo_class()
@@ -726,7 +764,8 @@ class TIPONobinCustom:
                 f"ERROR: {error_msg}",
                 "",
                 0,
-                "z-tipo-extension required"
+                "z-tipo-extension required",
+                ""
             )
 
         # Check if semantic filtering is available
@@ -735,7 +774,8 @@ class TIPONobinCustom:
                 "ERROR: sentence-transformers not installed. Run: pip install sentence-transformers",
                 "",
                 0,
-                "sentence-transformers required"
+                "sentence-transformers required",
+                ""
             )
 
         # Load semantic model
@@ -747,7 +787,8 @@ class TIPONobinCustom:
                     "ERROR: Failed to load semantic model",
                     "",
                     0,
-                    "model loading failed"
+                    "model loading failed",
+                    ""
                 )
 
         # Parse ban tags
@@ -771,6 +812,7 @@ class TIPONobinCustom:
         regeneration_count = 0
         current_seed = seed
         all_excluded = []
+        all_removed_character_tags = []
         filtered_output = ""
         original_output = ""
 
@@ -818,7 +860,8 @@ class TIPONobinCustom:
                         filtered_output,
                         original_output,
                         regeneration_count,
-                        f"TIPO context overflow - returned original input. Reduce input length or use shorter tag_length/nl_length."
+                        f"TIPO context overflow - returned original input. Reduce input length or use shorter tag_length/nl_length.",
+                        ""
                     )
                 else:
                     # Re-raise other ValueErrors
@@ -860,6 +903,14 @@ class TIPONobinCustom:
                     else:
                         addon_tags = addon_part
                         addon_nl = ""
+
+                    # Filter character tags first (if enabled)
+                    if filter_character_tags:
+                        addon_tags, removed_char_tags = filter_character_tags_from_text(
+                            addon_tags,
+                            show_filtering_log
+                        )
+                        all_removed_character_tags.extend(removed_char_tags)
 
                     # Filter addon tags with regex
                     filtered_addon_tags, excluded_tags = filter_tags_regex(
@@ -946,6 +997,9 @@ class TIPONobinCustom:
             for word, tag, score in all_excluded
         ])
 
+        # Format removed character tags
+        removed_character_tags_str = ", ".join(all_removed_character_tags)
+
         # Remove duplicate tags if enabled
         if remove_duplicate_tags:
             filtered_output = deduplicate_tags(filtered_output)
@@ -957,13 +1011,15 @@ class TIPONobinCustom:
             print(f"[TIPO nobin custom] Generation complete")
             print(f"Regenerations: {regeneration_count}")
             print(f"Excluded words: {len(all_excluded)}")
+            print(f"Removed character tags: {len(all_removed_character_tags)}")
             print(f"{'='*60}\n")
 
         return (
             filtered_output,
             original_output,
             regeneration_count,
-            excluded_words_str
+            excluded_words_str,
+            removed_character_tags_str
         )
 
 
