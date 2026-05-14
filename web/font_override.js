@@ -39,8 +39,16 @@ app.registerExtension({
                 unicode-range: U+3000-9FFF, U+F900-FAFF, U+FF00-FFEF, U+AC00-D7AF;
             }
 
-            /* Override all HTML elements */
-            * {
+            /* Override specific UI elements only - avoid affecting colors/layout */
+            body,
+            input,
+            textarea,
+            button,
+            select,
+            option,
+            .comfy-menu,
+            .comfy-modal,
+            .litegraph {
                 font-family: "Noto Sans JP", "Hiragino Kaku Gothic ProN", "Meiryo",
                              sans-serif !important;
             }
