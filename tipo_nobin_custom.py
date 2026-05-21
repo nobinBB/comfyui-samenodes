@@ -554,8 +554,9 @@ def filter_character_tags_from_text(tags_text: str, show_log: bool = True) -> Tu
     filtered_tags = []
     removed_tags = []
 
-    # Pattern: word_(word) - matches character tags like "character_name_(series)"
-    character_tag_pattern = re.compile(r'^[^_]+_\([^)]+\)$')
+    # Pattern: anything_(anything) - matches character tags like "character_name_(series)"
+    # Allows multiple underscores in character name (e.g., "hatsune_miku_(vocaloid)")
+    character_tag_pattern = re.compile(r'.+_\(.+\)$')
 
     for tag in tags:
         if character_tag_pattern.match(tag):
