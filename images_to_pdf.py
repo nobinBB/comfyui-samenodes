@@ -101,6 +101,9 @@ class ImagesToPdf:
             if not image_files:
                 return ("", f"No image files found in: {input_folder}")
 
+            # Remove duplicates (case-insensitive filesystems may find same file twice)
+            image_files = list(dict.fromkeys(image_files))
+
             # Sort by filename if requested
             if sort_by_filename:
                 image_files = sorted(image_files, key=lambda x: x.name)
