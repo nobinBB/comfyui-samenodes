@@ -4,6 +4,7 @@ Converts multiple images to a single PDF file
 """
 
 import os
+import re
 from pathlib import Path
 from PIL import Image
 from datetime import datetime
@@ -44,6 +45,22 @@ class ImagesToPdf:
     FUNCTION = "convert_to_pdf"
     CATEGORY = "image/pdf"
     OUTPUT_NODE = True
+
+    def natural_sort_key(self, path):
+        """
+        Generate natural sort key for filenames with numbers
+
+        Examples:
+            image1.png -> ['image', 1, '.png']
+            image10.png -> ['image', 10, '.png']
+            Image2.png -> ['image', 2, '.png']  (case-insensitive)
+
+        Returns list of strings and integers for proper numeric sorting
+        """
+        def convert(text):
+            return int(text) if text.isdigit() else text.lower()
+
+        return [convert(c) for c in re.split(r'(\d+)', path.name)]
 
     def get_quality_settings(self, quality):
         """
@@ -104,9 +121,9 @@ class ImagesToPdf:
             # Remove duplicates (case-insensitive filesystems may find same file twice)
             image_files = list(dict.fromkeys(image_files))
 
-            # Sort by filename if requested
+            # Sort by filename if requested (natural sort: case-insensitive, numeric-aware)
             if sort_by_filename:
-                image_files = sorted(image_files, key=lambda x: x.name)
+                image_files = sorted(image_files, key=self.natural_sort_key)
 
             print(f"\n{'='*60}")
             print(f"Images to PDF Converter")
@@ -116,6 +133,12 @@ class ImagesToPdf:
             print(f"Include subfolders: {include_subfolders}")
             print(f"Sort by filename: {sort_by_filename}")
             print(f"Quality: {quality}")
+            if sort_by_filename and image_files:
+                print(f"\nFile order (first 10):")
+                for i, f in enumerate(image_files[:10], 1):
+                    print(f"  {i}. {f.name}")
+                if len(image_files) > 10:
+                    print(f"  ... and {len(image_files) - 10} more")
             print(f"{'='*60}\n")
 
             # Get quality settings
