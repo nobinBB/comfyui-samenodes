@@ -883,36 +883,31 @@ class TIPONobinCustom:
                 print(f"  Original user input: '{unformatted_by_user[:100]}...'")
                 print(f"  TIPO full output: '{unformatted_by_tipo[:100]}...'")
 
-            # Apply semantic filtering if enabled
-            if enable_semantic_filtering and model:
-                # Extract what TIPO added by removing original from full output
-                # unformatted_by_tipo format: "original_tags, addon_tags\naddon_nl"
-                # We need to filter only addon_tags and addon_nl
+            # Extract what TIPO added (works regardless of semantic filtering)
+            if unformatted_by_user in unformatted_by_tipo:
+                addon_part = unformatted_by_tipo.replace(unformatted_by_user, '', 1).strip()
+                addon_part = addon_part.lstrip(',').lstrip('\n').strip()
 
-                # Find original input in TIPO output
-                if unformatted_by_user in unformatted_by_tipo:
-                    # Remove original to get addon
-                    addon_part = unformatted_by_tipo.replace(unformatted_by_user, '', 1).strip()
-                    addon_part = addon_part.lstrip(',').lstrip('\n').strip()
+                if show_filtering_log:
+                    print(f"  TIPO additions: '{addon_part[:100]}...'")
 
-                    if show_filtering_log:
-                        print(f"  TIPO additions (to filter): '{addon_part[:100]}...'")
+                # Split addon into tags and NL
+                if '\n' in addon_part:
+                    addon_tags, addon_nl = addon_part.split('\n', 1)
+                else:
+                    addon_tags = addon_part
+                    addon_nl = ""
 
-                    # Split addon into tags and NL
-                    if '\n' in addon_part:
-                        addon_tags, addon_nl = addon_part.split('\n', 1)
-                    else:
-                        addon_tags = addon_part
-                        addon_nl = ""
+                # STEP 1: Filter character tags (independent of semantic filtering)
+                if filter_character_tags:
+                    addon_tags, removed_char_tags = filter_character_tags_from_text(
+                        addon_tags,
+                        show_filtering_log
+                    )
+                    all_removed_character_tags.extend(removed_char_tags)
 
-                    # Filter character tags first (if enabled)
-                    if filter_character_tags:
-                        addon_tags, removed_char_tags = filter_character_tags_from_text(
-                            addon_tags,
-                            show_filtering_log
-                        )
-                        all_removed_character_tags.extend(removed_char_tags)
-
+                # STEP 2: Apply semantic filtering if enabled
+                if enable_semantic_filtering and model:
                     # Filter addon tags with regex
                     filtered_addon_tags, excluded_tags = filter_tags_regex(
                         addon_tags,
@@ -929,32 +924,37 @@ class TIPONobinCustom:
                     )
 
                     all_excluded.extend(excluded_nl)
+                else:
+                    # No semantic filtering - use addon as-is (but character tags already filtered)
+                    filtered_addon_tags = addon_tags
+                    filtered_addon_nl = addon_nl
 
-                    # Reconstruct: original (protected) + filtered addon
-                    result_parts = [unformatted_by_user]  # Always include original!
+                # Reconstruct: original (protected) + filtered addon
+                result_parts = [unformatted_by_user]  # Always include original!
 
-                    if filtered_addon_tags:
-                        result_parts.append(filtered_addon_tags)
+                if filtered_addon_tags:
+                    result_parts.append(filtered_addon_tags)
 
-                    tags_part = ', '.join(result_parts)
+                tags_part = ', '.join(result_parts)
 
-                    if filtered_addon_nl:
-                        filtered_output = f"{tags_part}\n{filtered_addon_nl}"
-                    else:
-                        filtered_output = tags_part
+                if filtered_addon_nl:
+                    filtered_output = f"{tags_part}\n{filtered_addon_nl}"
+                else:
+                    filtered_output = tags_part
 
-                    # Quality check (if enabled)
-                    if enable_quality_check:
-                        is_valid, reason = check_output_quality(filtered_output, tags, max_word_repetition)
-                        if not is_valid:
-                            if show_filtering_log:
-                                print(f"[TIPO nobin custom] Quality check failed: {reason}")
-                                print(f"[TIPO nobin custom] Regenerating with seed {current_seed + 1}...")
-                            regeneration_count += 1
-                            current_seed += 1
-                            continue
+                # Quality check (if enabled)
+                if enable_quality_check:
+                    is_valid, reason = check_output_quality(filtered_output, tags, max_word_repetition)
+                    if not is_valid:
+                        if show_filtering_log:
+                            print(f"[TIPO nobin custom] Quality check failed: {reason}")
+                            print(f"[TIPO nobin custom] Regenerating with seed {current_seed + 1}...")
+                        regeneration_count += 1
+                        current_seed += 1
+                        continue
 
-                    # Count keywords in ADDED content only
+                # Count keywords in ADDED content only (only if semantic filtering is on)
+                if enable_semantic_filtering:
                     addon_keyword_count = count_keywords(filtered_addon_tags) + count_keywords(filtered_addon_nl)
 
                     if show_filtering_log:
@@ -970,26 +970,13 @@ class TIPONobinCustom:
                     if show_filtering_log:
                         print(f"[TIPO nobin custom] Regenerating with seed {current_seed}...")
                 else:
-                    # Can't find original in output - use full output (shouldn't happen)
-                    if show_filtering_log:
-                        print(f"[TIPO nobin custom] Warning: Could not find original in output")
-                    filtered_output = formatted_by_tipo
+                    # No regeneration without semantic filtering
                     break
             else:
-                # No semantic filtering
+                # Can't find original in output - use full output (shouldn't happen)
+                if show_filtering_log:
+                    print(f"[TIPO nobin custom] Warning: Could not find original in output")
                 filtered_output = formatted_by_tipo
-
-                # Quality check (if enabled)
-                if enable_quality_check:
-                    is_valid, reason = check_output_quality(filtered_output, tags, max_word_repetition)
-                    if not is_valid:
-                        if show_filtering_log:
-                            print(f"[TIPO nobin custom] Quality check failed: {reason}")
-                            print(f"[TIPO nobin custom] Regenerating with seed {current_seed + 1}...")
-                        regeneration_count += 1
-                        current_seed += 1
-                        continue
-
                 break
 
         # Format excluded words
