@@ -38,7 +38,6 @@ _BAN_TAG_EMBEDDINGS_CACHE = {}
 def find_custom_nodes_dir() -> Path:
     """
     Locate ComfyUI/custom_nodes directory from this node file.
-    Works even if this file is inside a subfolder of a custom node.
     """
     current = Path(__file__).resolve()
 
@@ -46,13 +45,233 @@ def find_custom_nodes_dir() -> Path:
         if parent.name == "custom_nodes":
             return parent
 
-        # Fallback: detect directory that contains z-tipo-extension
         if (parent / "z-tipo-extension").exists():
             return parent
 
-    # Last fallback: current node directory's parent
     return current.parent.parent
 
+
+def get_z_tipo_extension_dir() -> Path:
+    """
+    Locate z-tipo-extension directory.
+    """
+    custom_nodes_dir = find_custom_nodes_dir()
+
+    possible_names = [
+        "z-tipo-extension",
+        "ComfyUI-z-tipo-extension",
+        "z_tipo_extension",
+        "z-tipo",
+        "tipo-extension",
+        "ComfyUI-tipo",
+        "tipo",
+    ]
+
+    for name in possible_names:
+        candidate = custom_nodes_dir / name
+        if candidate.exists():
+            return candidate
+
+    return custom_nodes_dir / "z-tipo-extension"
+
+
+def get_z_tipo_models_dir() -> Path:
+    """
+    Target:
+    ComfyUI/custom_nodes/z-tipo-extension/models/
+    """
+    return get_z_tipo_extension_dir() / "models"
+
+
+def get_tipo_default_model_list() -> List[str]:
+    """
+    Get default tipo_model list from z-tipo-extension itself.
+
+    This keeps existing default entries such as:
+    KBlueLeaf/TIPO-500M-ft
+    KBlueLeaf/TIPO-200M-ft2
+    etc.
+    """
+    import sys
+    import importlib.util
+
+    # Method 1: already loaded modules
+    for module_name, module in list(sys.modules.items()):
+        if "tipo" in module_name.lower():
+            try:
+                if hasattr(module, "MODEL_NAME_LIST"):
+                    model_list = list(module.MODEL_NAME_LIST)
+                    if model_list:
+                        print("[TIPO nobin custom] Loaded default model list from MODEL_NAME_LIST")
+                        return model_list
+
+                if hasattr(module, "TIPO") and hasattr(module.TIPO, "INPUT_TYPES"):
+                    tipo_inputs = module.TIPO.INPUT_TYPES()
+                    model_list = list(tipo_inputs["required"].get("tipo_model", ([], {}))[0])
+                    if model_list:
+                        print("[TIPO nobin custom] Loaded default model list from TIPO.INPUT_TYPES")
+                        return model_list
+            except Exception as e:
+                print(f"[TIPO nobin custom] Failed reading loaded tipo module {module_name}: {e}")
+
+    # Method 2: import z-tipo-extension/nodes/tipo.py directly
+    tipo_dir = get_z_tipo_extension_dir()
+    tipo_py = tipo_dir / "nodes" / "tipo.py"
+
+    if not tipo_py.exists():
+        print(f"[TIPO nobin custom] z-tipo tipo.py not found: {tipo_py}")
+        return []
+
+    try:
+        spec = importlib.util.spec_from_file_location(
+            "tipo_model_list_loader",
+            tipo_py
+        )
+
+        if spec and spec.loader:
+            tipo_module = importlib.util.module_from_spec(spec)
+            sys.modules[spec.name] = tipo_module
+            spec.loader.exec_module(tipo_module)
+
+            if hasattr(tipo_module, "MODEL_NAME_LIST"):
+                model_list = list(tipo_module.MODEL_NAME_LIST)
+                if model_list:
+                    print("[TIPO nobin custom] Loaded default model list from imported MODEL_NAME_LIST")
+                    return model_list
+
+            if hasattr(tipo_module, "TIPO") and hasattr(tipo_module.TIPO, "INPUT_TYPES"):
+                tipo_inputs = tipo_module.TIPO.INPUT_TYPES()
+                model_list = list(tipo_inputs["required"].get("tipo_model", ([], {}))[0])
+                if model_list:
+                    print("[TIPO nobin custom] Loaded default model list from imported TIPO.INPUT_TYPES")
+                    return model_list
+
+    except Exception as e:
+        print(f"[TIPO nobin custom] Failed to import z-tipo model list from {tipo_py}: {e}")
+
+    return []
+
+
+def get_extra_tipo_model_list_from_models_dir() -> List[str]:
+    """
+    Add extra local model entries from:
+    ComfyUI/custom_nodes/z-tipo-extension/models/
+
+    Important:
+    - This does not replace z-tipo default models.
+    - It only adds extra models that are not already in the default list.
+    """
+    models_dir = get_z_tipo_models_dir()
+
+    if not models_dir.exists():
+        print(f"[TIPO nobin custom] z-tipo models directory not found: {models_dir}")
+        return []
+
+    model_names = []
+
+    model_file_extensions = {
+        ".gguf",
+        ".safetensors",
+        ".bin",
+        ".pt",
+        ".pth",
+        ".ckpt",
+    }
+
+    marker_files = {
+        "config.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "generation_config.json",
+        "special_tokens_map.json",
+    }
+
+    try:
+        # Case 1:
+        # models/KBlueLeaf/TIPO-500M-ft/
+        # models/KBlueLeaf/TIPO-200M-ft2/
+        for item in models_dir.rglob("*"):
+            if not item.is_dir():
+                continue
+
+            if item.name.startswith(".") or item.name == "__pycache__":
+                continue
+
+            has_model_marker = False
+
+            for child in item.iterdir():
+                if child.is_file():
+                    if child.name in marker_files:
+                        has_model_marker = True
+                        break
+
+                    if child.suffix.lower() in model_file_extensions:
+                        has_model_marker = True
+                        break
+
+            if has_model_marker:
+                rel = item.relative_to(models_dir).as_posix()
+                if rel and rel != ".":
+                    model_names.append(rel)
+
+        # Case 2:
+        # models/some_model.gguf
+        # Usually not needed for KBlueLeaf/TIPO folders, but supported.
+        for item in models_dir.iterdir():
+            if item.is_file() and item.suffix.lower() in model_file_extensions:
+                model_names.append(item.name)
+
+    except Exception as e:
+        print(f"[TIPO nobin custom] Error reading extra TIPO models from {models_dir}: {e}")
+        return []
+
+    unique = sorted(set(model_names), key=lambda x: x.lower())
+
+    if unique:
+        print(f"[TIPO nobin custom] Extra local TIPO models from {models_dir}:")
+        for name in unique:
+            print(f"[TIPO nobin custom]   + {name}")
+
+    return unique
+
+
+def get_tipo_model_list() -> List[str]:
+    """
+    Final tipo_model list.
+
+    Priority:
+    1. z-tipo-extension default model list
+    2. Extra models found in z-tipo-extension/models/
+    3. default fallback
+    """
+    default_models = get_tipo_default_model_list()
+    extra_models = get_extra_tipo_model_list_from_models_dir()
+
+    merged = []
+    seen = set()
+
+    for name in default_models + extra_models:
+        if not name:
+            continue
+
+        name = str(name).strip()
+        if not name:
+            continue
+
+        key = name.lower()
+
+        if key not in seen:
+            seen.add(key)
+            merged.append(name)
+
+    if not merged:
+        merged = ["default"]
+
+    print("[TIPO nobin custom] Final tipo_model list:")
+    for name in merged:
+        print(f"[TIPO nobin custom]   - {name}")
+
+    return merged
 
 def get_z_tipo_models_dir() -> Path:
     """
