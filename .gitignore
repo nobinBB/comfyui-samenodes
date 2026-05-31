@@ -1,3 +1,5 @@
+.gitignore
+
 # Python
 __pycache__/
 *.py[cod]
@@ -22,3 +24,10 @@ ENV/
 # OS
 .DS_Store
 Thumbs.db
+
+oxipng.exe
+pngquant.exe
+seed_step_counters.json
+pyproject.toml
+wildcard_seed_counters.json
+wildcard_seed_cache.json
