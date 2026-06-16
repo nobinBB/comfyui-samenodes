@@ -206,7 +206,6 @@ class ImpactWildcardProcessorSeed:
     ):
         payload = {
             "wildcard_text": wildcard_text,
-            "seed": seed,
             "seed_mode": seed_mode,
             "divisor": divisor,
             "increment_amount": increment_amount,
