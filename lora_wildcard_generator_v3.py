@@ -1,0 +1,332 @@
+"""
+LoRA Wildcard Generator V3 Node for ComfyUI
+Generates YAML wildcard files from Civitai JSON metadata
+
+Changes from V1:
+- Removed combination entry (all-{wildcard_name})
+- Changed LoRA syntax: < to =, > to ]
+- Changed trigger format: {trigger} to <!trigger!>
+"""
+
+import os
+import json
+import yaml
+from pathlib import Path
+
+
+class FoldedString(str):
+    """Custom string class for YAML folded scalar output (>-)"""
+    pass
+
+
+def folded_string_representer(dumper, data):
+    """Representer for folded scalar style in YAML"""
+    return dumper.represent_scalar('tag:yaml.org,2002:str', data, style='>')
+
+
+def str_representer(dumper, data):
+    """
+    Custom string representer for YAML to use plain style (no quotes)
+    for strings containing wildcard patterns {A|B} or __wildcard__.
+    This ensures wildcards are properly expanded by ComfyUI wildcard systems.
+    """
+    # Use plain style (no quotes) for strings with wildcard syntax
+    if '{' in data or '__' in data or '=' in data or ']' in data or '!' in data:
+        return dumper.represent_scalar('tag:yaml.org,2002:str', data, style='')
+    # Default representation for other strings
+    return dumper.represent_scalar('tag:yaml.org,2002:str', data)
+
+
+# Register custom representers
+yaml.add_representer(FoldedString, folded_string_representer)
+yaml.add_representer(str, str_representer)
+
+
+class LoraWildcardGeneratorV3:
+    """
+    A node that generates YAML wildcard files from Civitai JSON metadata.
+    Extracts trainedWords from JSON files and creates LoRA syntax entries.
+
+    V3 improvements:
+    - No combination entry
+    - New LoRA syntax: =lora:name:{weights}]<!trigger!>
+    """
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                # Folder containing JSON files
+                "json_folder": ("STRING", {
+                    "default": "",
+                    "multiline": False
+                }),
+                # Wildcard name (also used as YAML filename)
+                "wildcard_name": ("STRING", {
+                    "default": "lora_triggers_v3",
+                    "multiline": False
+                }),
+                # Output folder for YAML file
+                "output_folder": ("STRING", {
+                    "default": "wildcards",
+                    "multiline": False
+                }),
+                # Include subfolders
+                "include_subfolders": ("BOOLEAN", {
+                    "default": False
+                }),
+            },
+        }
+
+    RETURN_TYPES = ("STRING", "INT")
+    RETURN_NAMES = ("status", "entry_count")
+    FUNCTION = "generate_wildcard"
+    CATEGORY = "utils/lora"
+    OUTPUT_NODE = True
+
+    def parse_json_file(self, json_path):
+        """
+        Parse JSON file and extract civitai metadata
+
+        Args:
+            json_path: Path to JSON file
+
+        Returns:
+            Dictionary with filename and trainedWords, or None if parsing fails
+        """
+        try:
+            with open(json_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+
+            # Extract civitai metadata
+            civitai = data.get('civitai', {})
+            trained_words = civitai.get('trainedWords', [])
+
+            # Get filename without extension for LoRA name
+            lora_name = json_path.stem
+
+            # Remove .metadata suffix if present
+            if lora_name.endswith('.metadata'):
+                lora_name = lora_name[:-9]  # Remove '.metadata' (9 characters)
+
+            return {
+                'lora_name': lora_name,
+                'trained_words': trained_words
+            }
+
+        except Exception as e:
+            print(f"Error parsing {json_path.name}: {e}")
+            return None
+
+    def generate_lora_entry(self, lora_name, trained_words):
+        """
+        Generate LoRA syntax entry with V3 format
+
+        Args:
+            lora_name: Name of the LoRA model
+            trained_words: List of trained words/triggers
+
+        Returns:
+            String with LoRA syntax (V3 format)
+        """
+        # Join trained words with comma and space
+        words = ', '.join(trained_words)
+
+        # Replace newlines with | to handle multi-line trigger words
+        words = words.replace('\n', '|').replace('\r', '')
+
+        # Clean up comma before pipe (e.g., ", |" or ",|" becomes "|")
+        words = words.replace(', |', '|').replace(',|', '|')
+
+        # Clean up space after pipe (e.g., "| " becomes "|")
+        words = words.replace('| ', '|')
+
+        # Normalize whitespace for each part separated by pipe
+        # Split by pipe, trim and normalize each part, then rejoin
+        parts = words.split('|')
+        parts = [' '.join(part.strip().split()) for part in parts]
+        words = '|'.join(parts)
+
+        # Remove trailing commas, pipes, and spaces
+        words = words.rstrip(',| ')
+
+        # V3 format:
+        # - LoRA syntax: =lora:name:{0.4|0.5|0.6|0.7|0.8}]
+        # - Trigger words: <!trigger!>
+        # Full format: =lora:name:{0.4|0.5|0.6|0.7|0.8}]<!trigger!>
+        # If no trigger words, omit the trigger part entirely
+        if words:
+            lora_syntax = f"=lora:{lora_name}:{{0.4|0.5|0.6|0.7|0.8}}]<!{words}!>"
+        else:
+            lora_syntax = f"=lora:{lora_name}:{{0.4|0.5|0.6|0.7|0.8}}]"
+
+        return lora_syntax
+
+    def create_yaml_content(self, entries, wildcard_name):
+        """
+        Create YAML content from entries (V3: no combination entry)
+
+        Args:
+            entries: List of dictionaries with lora_name and trained_words
+            wildcard_name: Name for the wildcard (used as top-level key)
+
+        Returns:
+            YAML formatted string
+        """
+        # Create nested dictionary for YAML
+        # V3: No 'all-<wildcard_name>' combination entry
+        nested_dict = {}
+
+        for entry in entries:
+            lora_name = entry['lora_name']
+            trained_words = entry['trained_words']
+
+            # Generate LoRA entry (V3 format)
+            lora_entry = self.generate_lora_entry(lora_name, trained_words)
+
+            # Add to nested dictionary
+            # Format: filename: [=lora:...@<!triggers!>]
+            nested_dict[lora_name] = [lora_entry]
+
+        # Create final dictionary with wildcard_name as top-level key
+        # V3: Only individual entries, no combination
+        final_dict = {
+            wildcard_name: nested_dict
+        }
+
+        # Convert to YAML
+        # Use large width to prevent line wrapping
+        yaml_content = yaml.dump(
+            final_dict,
+            default_flow_style=False,
+            allow_unicode=True,
+            sort_keys=False,
+            width=float('inf')  # Prevent automatic line wrapping
+        )
+
+        return yaml_content
+
+    def generate_wildcard(self, json_folder, wildcard_name, output_folder, include_subfolders):
+        """
+        Generate YAML wildcard file from JSON files
+
+        Args:
+            json_folder: Folder containing JSON files with Civitai metadata
+            wildcard_name: Name for the wildcard (used as filename)
+            output_folder: Folder to save the YAML file
+            include_subfolders: Whether to search subfolders recursively
+
+        Returns:
+            Tuple of (status_message, entry_count)
+        """
+        try:
+            # Validate input folder
+            folder = Path(json_folder)
+            if not folder.exists():
+                return (f"Error: Folder does not exist: {json_folder}", 0)
+
+            if not folder.is_dir():
+                return (f"Error: Path is not a directory: {json_folder}", 0)
+
+            # Find all JSON files (with or without subfolders)
+            if include_subfolders:
+                json_files = list(folder.rglob('*.json'))  # Recursive search
+            else:
+                json_files = list(folder.glob('*.json'))   # Current folder only
+
+            if not json_files:
+                return (f"No JSON files found in: {json_folder}", 0)
+
+            print(f"\n{'='*60}")
+            print(f"Processing JSON files for LoRA wildcards (V3)...")
+            print(f"JSON folder: {json_folder}")
+            print(f"Include subfolders: {include_subfolders}")
+            print(f"Found {len(json_files)} JSON files")
+            print(f"{'='*60}\n")
+
+            # Parse all JSON files
+            entries = []
+            skipped_files = []
+            duplicate_loras = []
+            seen_lora_names = set()
+
+            for json_file in json_files:
+                print(f"Processing: {json_file.name}")
+                entry = self.parse_json_file(json_file)
+
+                if entry:
+                    lora_name = entry['lora_name']
+
+                    # Check for duplicate LoRA names
+                    if lora_name in seen_lora_names:
+                        duplicate_loras.append(json_file.name)
+                        print(f"  ⚠ Skipped: {lora_name} (duplicate)")
+                        continue
+
+                    # Add to seen set
+                    seen_lora_names.add(lora_name)
+
+                    entries.append(entry)
+                    print(f"  ✓ Extracted: {entry['lora_name']}")
+                    triggers = ', '.join(entry['trained_words']) if entry['trained_words'] else '(none)'
+                    print(f"    Triggers: {triggers}")
+                else:
+                    skipped_files.append(json_file.name)
+                    print(f"  ✗ Skipped: {json_file.name} (parse error)")
+
+            if not entries:
+                return ("No valid entries found in JSON files", 0)
+
+            # Create YAML content (V3: no combination)
+            print(f"\nGenerating YAML wildcard file (V3 format)...")
+            yaml_content = self.create_yaml_content(entries, wildcard_name)
+
+            # Create output folder if it doesn't exist
+            output_path = Path(output_folder)
+            output_path.mkdir(parents=True, exist_ok=True)
+
+            # Save YAML file
+            # Filename and title are the same as wildcard_name
+            yaml_filename = f"{wildcard_name}.yaml"
+            yaml_filepath = output_path / yaml_filename
+
+            with open(yaml_filepath, 'w', encoding='utf-8') as f:
+                f.write(yaml_content)
+
+            print(f"\n{'='*60}")
+            print(f"✓ Wildcard file generated successfully! (V3)")
+            print(f"Output: {yaml_filepath}")
+            print(f"Entries: {len(entries)}")
+            if duplicate_loras:
+                print(f"Duplicates: {len(duplicate_loras)} files (skipped)")
+                print(f"Duplicate files: {', '.join(duplicate_loras)}")
+            if skipped_files:
+                print(f"Skipped: {len(skipped_files)} files (parse error)")
+                print(f"Skipped files: {', '.join(skipped_files)}")
+            print(f"{'='*60}\n")
+
+            # Preview first few entries
+            if entries:
+                print("Preview (first 3 entries in V3 format):")
+                for i, entry in enumerate(entries[:3]):
+                    lora_entry = self.generate_lora_entry(entry['lora_name'], entry['trained_words'])
+                    print(f"  {i+1}. {entry['lora_name']}: {lora_entry}")
+                print()
+
+            status = f"Successfully generated {yaml_filename} with {len(entries)} entries (V3 format)"
+            return (status, len(entries))
+
+        except Exception as e:
+            import traceback
+            error_msg = f"Error generating wildcard: {str(e)}\n{traceback.format_exc()}"
+            print(error_msg)
+            return (error_msg, 0)
+
+
+NODE_CLASS_MAPPINGS = {
+    "LoraWildcardGeneratorV3": LoraWildcardGeneratorV3,
+}
+
+NODE_DISPLAY_NAME_MAPPINGS = {
+    "LoraWildcardGeneratorV3": "LoRA Wildcard Generator V3",
+}

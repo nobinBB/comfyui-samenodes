@@ -31,3 +31,4 @@ seed_step_counters.json
 pyproject.toml
 wildcard_seed_counters.json
 wildcard_seed_cache.json
+tools.zip

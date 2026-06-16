@@ -1,7 +1,9 @@
 import { app } from "../../scripts/app.js";
 import { api } from "../../scripts/api.js";
 
-// Register extension for ImpactWildcardProcessorSeed node
+// Minimal frontend for ImpactWildcardProcessorSeed.
+// Shows only populate execution count.
+
 app.registerExtension({
     name: "comfyui.samenodes.ImpactWildcardProcessorSeed",
 
@@ -10,30 +12,10 @@ app.registerExtension({
             return;
         }
 
-        // Add custom display widgets
-        const seedWidget = node.addCustomWidget({
-            name: "seed_display",
-            type: "custom_text",
-            value: "Seed: 0",
-            options: {},
-            draw: function(ctx, node, widgetWidth, y, widgetHeight) {
-                const margin = 10;
-                ctx.save();
-                ctx.fillStyle = "#AAA";
-                ctx.font = "12px Arial";
-                ctx.fillText(this.value, margin, y + widgetHeight * 0.7);
-                ctx.restore();
-                return y + widgetHeight;
-            },
-            computeSize: function(width) {
-                return [width, 20];
-            }
-        });
-
         const countWidget = node.addCustomWidget({
             name: "count_display",
             type: "custom_text",
-            value: "Count: 0",
+            value: "Populate runs: 0",
             options: {},
             draw: function(ctx, node, widgetWidth, y, widgetHeight) {
                 const margin = 10;
@@ -49,11 +31,9 @@ app.registerExtension({
             }
         });
 
-        // Add reset button
-        const resetButton = node.addWidget("button", "Reset Counter", null, () => {
+        const resetButton = node.addWidget("button", "Reset Count / Cache", null, () => {
             const nodeId = node.id;
 
-            // Call backend API to reset counter
             fetch("/samenodes/reset_wildcard_seed_counter", {
                 method: "POST",
                 headers: {
@@ -66,100 +46,36 @@ app.registerExtension({
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    console.log(`Counter reset for node ${nodeId}`);
-                    // Update display
-                    countWidget.value = "Count: 0";
-                    updateSeedDisplay();
+                    countWidget.value = "Populate runs: 0";
                     node.setDirtyCanvas(true);
+                    console.log(`ImpactWildcardProcessorSeed: counter/cache reset for node ${nodeId}`);
                 } else {
-                    console.error("Failed to reset counter");
+                    console.error("ImpactWildcardProcessorSeed: failed to reset counter/cache", data.error);
                 }
             })
             .catch(error => {
-                console.error("Error resetting counter:", error);
+                console.error("ImpactWildcardProcessorSeed: error resetting counter/cache:", error);
             });
         });
 
-        // Function to update seed display based on current parameters
-        const updateSeedDisplay = () => {
-            const seedModeWidget = node.widgets.find(w => w.name === "seed_mode");
-            const seedWidget_input = node.widgets.find(w => w.name === "seed");
-
-            if (seedModeWidget && seedWidget_input) {
-                const seedMode = seedModeWidget.value || "random";
-                const seed = seedWidget_input.value || 0;
-
-                // Parse current count from display
-                const countMatch = countWidget.value.match(/Count: (\d+)/);
-                const currentCount = countMatch ? parseInt(countMatch[1]) : 0;
-
-                // Show seed mode info
-                let seedInfo = `Seed mode: ${seedMode}`;
-                if (seedMode !== "random") {
-                    seedInfo += ` (seed: ${seed})`;
-                }
-                seedWidget.value = seedInfo;
-            }
-        };
-
-        // Update seed display when parameters change
-        const seedModeWidget = node.widgets.find(w => w.name === "seed_mode");
-        const seedWidget_input = node.widgets.find(w => w.name === "seed");
-        const divisorWidget = node.widgets.find(w => w.name === "divisor");
-        const incrementWidget = node.widgets.find(w => w.name === "increment_amount");
-
-        if (seedModeWidget) {
-            const originalCallback = seedModeWidget.callback;
-            seedModeWidget.callback = function(value) {
-                if (originalCallback) originalCallback.call(this, value);
-                updateSeedDisplay();
-            };
-        }
-
-        if (seedWidget_input) {
-            const originalCallback = seedWidget_input.callback;
-            seedWidget_input.callback = function(value) {
-                if (originalCallback) originalCallback.call(this, value);
-                updateSeedDisplay();
-            };
-        }
-
-        if (divisorWidget) {
-            const originalCallback = divisorWidget.callback;
-            divisorWidget.callback = function(value) {
-                if (originalCallback) originalCallback.call(this, value);
-                updateSeedDisplay();
-            };
-        }
-
-        if (incrementWidget) {
-            const originalCallback = incrementWidget.callback;
-            incrementWidget.callback = function(value) {
-                if (originalCallback) originalCallback.call(this, value);
-                updateSeedDisplay();
-            };
-        }
-
-        // Handle mode-based widget state
         const modeWidget = node.widgets.find(w => w.name === "mode");
         const populatedTextWidget = node.widgets.find(w => w.name === "populated_text");
         const wildcardTextWidget = node.widgets.find(w => w.name === "wildcard_text");
         const selectWildcardWidget = node.widgets.find(w => w.name === "Select to add Wildcard");
 
-        // Handle Select to add Wildcard dropdown (Impact Pack behavior)
         if (selectWildcardWidget && wildcardTextWidget) {
             const originalCallback = selectWildcardWidget.callback;
-            selectWildcardWidget.callback = function(value) {
-                if (originalCallback) originalCallback.call(this, value);
 
-                // If a wildcard is selected (not the default text), insert it into wildcard_text
+            selectWildcardWidget.callback = function(value) {
+                if (originalCallback) {
+                    originalCallback.call(this, value);
+                }
+
                 if (value && value !== "Select the Wildcard to add to the text") {
-                    // Append the selected wildcard to wildcard_text
                     const currentText = wildcardTextWidget.value || "";
                     const separator = currentText.length > 0 ? ", " : "";
                     wildcardTextWidget.value = currentText + separator + value;
 
-                    // Reset dropdown back to default
                     selectWildcardWidget.value = "Select the Wildcard to add to the text";
 
                     node.setDirtyCanvas(true);
@@ -168,65 +84,59 @@ app.registerExtension({
         }
 
         const updateWidgetStates = () => {
-            if (modeWidget && populatedTextWidget) {
-                const mode = modeWidget.value;
-                // In populate mode, populated_text is read-only (like Impact Pack)
-                if (mode === "populate") {
-                    populatedTextWidget.inputEl.disabled = true;
-                    populatedTextWidget.inputEl.placeholder = "Populated Prompt (Will be generated automatically)";
-                } else {
-                    // In fixed/reproduce mode, user can edit populated_text
-                    populatedTextWidget.inputEl.disabled = false;
-                    populatedTextWidget.inputEl.placeholder = "Populated Prompt (Editable in fixed mode)";
-                }
+            if (!modeWidget || !populatedTextWidget || !populatedTextWidget.inputEl) {
+                return;
+            }
+
+            if (modeWidget.value === "populate") {
+                populatedTextWidget.inputEl.disabled = true;
+                populatedTextWidget.inputEl.placeholder = "Populated Prompt (generated automatically)";
+            } else {
+                populatedTextWidget.inputEl.disabled = false;
+                populatedTextWidget.inputEl.placeholder = "Populated Prompt (fixed/reproduce output)";
             }
         };
 
-        // Update widget states when mode changes
         if (modeWidget) {
             const originalCallback = modeWidget.callback;
+
             modeWidget.callback = function(value) {
-                if (originalCallback) originalCallback.call(this, value);
+                if (originalCallback) {
+                    originalCallback.call(this, value);
+                }
+
                 updateWidgetStates();
             };
         }
 
-        // Listen for execution complete events
         api.addEventListener("executed", (event) => {
             const data = event.detail;
 
-            if (data.node === node.id.toString()) {
-                // Node was executed, update display from backend data
-                if (data.output) {
-                    if (data.output.seed && data.output.seed.length > 0) {
-                        const seed = data.output.seed[0];
-                        const seedModeWidget = node.widgets.find(w => w.name === "seed_mode");
-                        const seedMode = seedModeWidget ? seedModeWidget.value : "random";
-                        seedWidget.value = `Seed: ${seed} (${seedMode})`;
-                    }
-
-                    if (data.output.count && data.output.count.length > 0) {
-                        const count = data.output.count[0];
-                        countWidget.value = `Count: ${count}`;
-                    }
-
-                    // Update populated_text widget with processed result (Impact Pack behavior)
-                    if (data.output.populated_text && data.output.populated_text.length > 0) {
-                        const populatedText = data.output.populated_text[0];
-                        if (populatedTextWidget) {
-                            populatedTextWidget.value = populatedText;
-                        }
-                    }
-
-                    node.setDirtyCanvas(true);
-
-                    console.log(`ImpactWildcardProcessorSeed (${node.id}): Updated display`);
-                }
+            if (data.node !== node.id.toString()) {
+                return;
             }
+
+            if (!data.output) {
+                return;
+            }
+
+            if (data.output.count && data.output.count.length > 0) {
+                const count = data.output.count[0];
+                countWidget.value = `Populate runs: ${count}`;
+            }
+
+            if (data.output.populated_text && data.output.populated_text.length > 0 && populatedTextWidget) {
+                populatedTextWidget.value = data.output.populated_text[0];
+            }
+
+            if (modeWidget && modeWidget.value === "reproduce") {
+                modeWidget.value = "populate";
+                updateWidgetStates();
+            }
+
+            node.setDirtyCanvas(true);
         });
 
-        // Initial update
-        updateSeedDisplay();
         updateWidgetStates();
     }
 });
