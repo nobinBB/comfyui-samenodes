@@ -67,6 +67,19 @@ def _clean_wildcard_title(title):
     return title.strip()
 
 
+def _is_parent_title(title):
+    title = str(title).strip()
+    lower = title.lower()
+
+    return (
+        title.endswith("-all")
+        or title.endswith("_all")
+        or "オールランダム" in title
+        or "allrandom" in lower
+        or "all_random" in lower
+    )
+
+
 def _final_selected_titles(used_titles, source_text):
     cleaned_used = []
 
@@ -78,20 +91,10 @@ def _final_selected_titles(used_titles, source_text):
 
     cleaned_used = _unique_keep_order(cleaned_used)
 
-    source_titles = _extract_titles_from_text(source_text)
-    source_titles = [_clean_wildcard_title(x) for x in source_titles]
-    source_titles = _unique_keep_order([x for x in source_titles if x])
-
-    # 元入力に直接書いてある親wildcardを除外
-    if len(cleaned_used) > 1:
-        cleaned_used = [x for x in cleaned_used if x not in source_titles]
-
-    # オールランダム系の親名は不要
+    # 表情-all / ポーズ-all みたいな親タイトルを除外
     cleaned_used = [
         x for x in cleaned_used
-        if "オールランダム" not in x
-        and "allrandom" not in x.lower()
-        and "all_random" not in x.lower()
+        if not _is_parent_title(x)
     ]
 
     return _unique_keep_order(cleaned_used)
@@ -199,7 +202,9 @@ class ImpactWildcardProcessorTitle:
         processed_text, used_titles = _process_with_trace(source_text, seed)
 
         selected_titles = _final_selected_titles(used_titles, source_text)
-        wildcard_titles = "\n".join(selected_titles)
+
+        # 改行しない。最後に選ばれたタイトルだけを横並び
+        wildcard_titles = "_".join(selected_titles)
 
         if PromptServer is not None and unique_id is not None:
             try:
